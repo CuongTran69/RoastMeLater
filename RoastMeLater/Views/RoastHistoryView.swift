@@ -50,6 +50,7 @@ struct RoastHistoryView: View {
         .onAppear {
             viewModel.loadRoasts()
         }
+        .dismissKeyboard()
     }
     
     private var filteredRoasts: [Roast] {

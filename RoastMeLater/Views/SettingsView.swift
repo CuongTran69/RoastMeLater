@@ -279,6 +279,7 @@ struct SettingsView: View {
         .onAppear {
             viewModel.loadSettings()
         }
+        .dismissKeyboardOnScroll()
     }
 }
 

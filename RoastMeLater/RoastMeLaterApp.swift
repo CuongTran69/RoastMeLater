@@ -12,6 +12,7 @@ import UserNotifications
 struct RoastMeApp: App {
     @StateObject private var notificationManager = NotificationManager()
     @StateObject private var lifecycleManager = AppLifecycleManager.shared
+    @State private var showSplash = true
 
     init() {
         // Setup notification categories
@@ -29,17 +30,29 @@ struct RoastMeApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(notificationManager)
-                .environmentObject(lifecycleManager)
-                .onAppear {
-                    // Schedule initial notifications
-                    notificationManager.scheduleHourlyNotifications()
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .navigateToRoastGenerator)) { _ in
-                    // Handle navigation from notification tap
-                    // This would be handled in ContentView
-                }
+            if showSplash {
+                SplashView()
+                    .onAppear {
+                        // Hide splash after 3 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                            withAnimation(.easeInOut(duration: 0.8)) {
+                                showSplash = false
+                            }
+                        }
+                    }
+            } else {
+                ContentView()
+                    .environmentObject(notificationManager)
+                    .environmentObject(lifecycleManager)
+                    .onAppear {
+                        // Schedule initial notifications
+                        notificationManager.scheduleHourlyNotifications()
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: .navigateToRoastGenerator)) { _ in
+                        // Handle navigation from notification tap
+                        // This would be handled in ContentView
+                    }
+            }
         }
     }
 }

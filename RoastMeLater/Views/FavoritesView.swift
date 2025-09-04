@@ -49,6 +49,7 @@ struct FavoritesView: View {
         .onAppear {
             viewModel.loadFavorites()
         }
+        .dismissKeyboard()
     }
     
     private var filteredFavorites: [Roast] {
