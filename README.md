@@ -119,8 +119,6 @@ Distributed under the MIT License. See `LICENSE` for more information.
 ## 📞 Liên Hệ
 
 - **Developer**: Cường Trần
-- **Email**: your-email@example.com
-- **Project Link**: [https://github.com/your-username/RoastMeLater](https://github.com/your-username/RoastMeLater)
 
 ## 🙏 Acknowledgments
 
