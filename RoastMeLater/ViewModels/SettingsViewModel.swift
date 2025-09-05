@@ -90,7 +90,7 @@ class SettingsViewModel: ObservableObject {
     private func updatePublishedProperties(from preferences: UserPreferences) {
         notificationsEnabled = preferences.notificationsEnabled
         notificationFrequency = preferences.notificationFrequency
-        defaultSpiceLevel = preferences.spiceLevel
+        defaultSpiceLevel = preferences.defaultSpiceLevel
         safetyFiltersEnabled = preferences.safetyFiltersEnabled
         preferredLanguage = preferences.preferredLanguage
         preferredCategories = preferences.preferredCategories
@@ -146,7 +146,7 @@ class SettingsViewModel: ObservableObject {
     func updateDefaultSpiceLevel(_ level: Int) {
         defaultSpiceLevel = level
         updatePreferences { preferences in
-            preferences.spiceLevel = level
+            preferences.defaultSpiceLevel = level
         }
     }
     
@@ -339,7 +339,7 @@ class SettingsViewModel: ObservableObject {
     
     func getContentSettingsObservable() -> Observable<(Int, Bool, String)> {
         return preferences
-            .map { ($0.spiceLevel, $0.safetyFiltersEnabled, $0.preferredLanguage) }
+            .map { ($0.defaultSpiceLevel, $0.safetyFiltersEnabled, $0.preferredLanguage) }
     }
 }
 

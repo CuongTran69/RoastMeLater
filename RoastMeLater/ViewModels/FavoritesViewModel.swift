@@ -106,19 +106,17 @@ class FavoritesViewModel: ObservableObject {
     }
     
     func toggleFavorite(roast: Roast) {
+        print("🔄 FavoritesViewModel.toggleFavorite:")
+        print("  roast.id: \(roast.id)")
+        print("  roast.isFavorite BEFORE: \(roast.isFavorite)")
+        print("  favoriteRoasts count BEFORE: \(favoriteRoasts.count)")
+
         storageService.toggleFavorite(roastId: roast.id)
-        
+
         // Update local array immediately for better UX
-        if roast.isFavorite {
-            // Remove from favorites
-            favoriteRoasts.removeAll { $0.id == roast.id }
-        } else {
-            // This shouldn't happen in favorites view, but handle it
-            var updatedRoast = roast
-            updatedRoast.isFavorite = true
-            favoriteRoasts.insert(updatedRoast, at: 0)
-        }
-        
+        // Since we're in favorites view, toggling will always remove from favorites
+        favoriteRoasts.removeAll { $0.id == roast.id }
+        print("  favoriteRoasts count AFTER: \(favoriteRoasts.count)")
         favoritesSubject.onNext(favoriteRoasts)
     }
     

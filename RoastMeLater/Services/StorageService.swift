@@ -74,14 +74,24 @@ class StorageService: StorageServiceProtocol {
     
     func toggleFavorite(roastId: UUID) {
         var history = getRoastHistory()
-        
+
         if let index = history.firstIndex(where: { $0.id == roastId }) {
+            let oldValue = history[index].isFavorite
             history[index].isFavorite.toggle()
+            let newValue = history[index].isFavorite
+
+            print("🔄 StorageService.toggleFavorite:")
+            print("  roastId: \(roastId)")
+            print("  isFavorite: \(oldValue) -> \(newValue)")
+
             saveRoastHistory(history)
             roastHistorySubject.onNext(history)
-            
+
             let favorites = getFavoriteRoasts()
+            print("  favorites count: \(favorites.count)")
             favoritesSubject.onNext(favorites)
+        } else {
+            print("❌ StorageService.toggleFavorite: Roast not found with id \(roastId)")
         }
     }
     

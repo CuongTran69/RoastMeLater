@@ -209,12 +209,12 @@ struct SettingsView: View {
                         viewModel.clearRoastHistory()
                     }
                     .foregroundColor(.red)
-                    
+
                     Button("Xóa danh sách yêu thích") {
                         viewModel.clearFavorites()
                     }
                     .foregroundColor(.red)
-                    
+
                     Button("Đặt lại tất cả cài đặt") {
                         viewModel.resetAllSettings()
                     }
@@ -279,56 +279,167 @@ struct SettingsView: View {
         .onAppear {
             viewModel.loadSettings()
         }
-        .dismissKeyboardOnScroll()
+        .onTapGesture {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
     }
 }
 
 struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(spacing: 20) {
-                    Image(systemName: "flame.fill")
-                        .font(.system(size: 80))
-                        .foregroundColor(.orange)
-                    
-                    Text("RoastMe")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                    
-                    Text("Phiên bản 1.0.0")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Giới thiệu")
-                            .font(.headline)
-                        
-                        Text("RoastMe là ứng dụng giúp các nhân viên văn phòng giải tỏa stress thông qua những câu roast hài hước và phù hợp với môi trường làm việc.")
-                        
-                        Text("Tính năng chính:")
-                            .font(.headline)
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            FeatureRow(icon: "sparkles", text: "Tạo roast tự động với AI")
-                            FeatureRow(icon: "bell", text: "Thông báo định kỳ")
-                            FeatureRow(icon: "heart", text: "Lưu roast yêu thích")
-                            FeatureRow(icon: "clock", text: "Lịch sử roast")
-                            FeatureRow(icon: "slider.horizontal.3", text: "Tùy chỉnh mức độ cay")
-                            FeatureRow(icon: "shield", text: "Bộ lọc an toàn")
+                VStack(spacing: 32) {
+                    // Header
+                    VStack(spacing: 16) {
+                        ZStack {
+                            Circle()
+                                .fill(LinearGradient(colors: [.orange.opacity(0.2), .red.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .frame(width: 120, height: 120)
+
+                            Image(systemName: "flame.fill")
+                                .font(.system(size: 50))
+                                .foregroundColor(.orange)
                         }
-                        
-                        Text("Phát triển bởi")
-                            .font(.headline)
-                        
-                        Text("RoastMe Team - Mang tiếng cười đến môi trường làm việc!")
-                            .foregroundColor(.secondary)
+
+                        VStack(spacing: 8) {
+                            Text("RoastMe Generator")
+                                .font(.largeTitle)
+                                .fontWeight(.bold)
+
+                            Text("🎯 Giải tỏa stress với những câu roast hài hước")
+                                .font(.headline)
+                                .foregroundColor(.orange)
+                                .multilineTextAlignment(.center)
+                        }
                     }
-                    .padding()
+
+                    // Mission
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Image(systemName: "target")
+                                .foregroundColor(.orange)
+                            Text("Sứ mệnh")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                        }
+
+                        Text("Mang lại tiếng cười và giúp dân văn phòng giải tỏa căng thẳng công việc thông qua những câu roast vui nhộn, phù hợp với văn hóa Việt Nam.")
+                            .font(.body)
+                            .lineSpacing(4)
+                    }
+                    .padding(20)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(16)
+
+                    // Features
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Image(systemName: "star.fill")
+                                .foregroundColor(.orange)
+                            Text("Tính năng nổi bật")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                        }
+
+                        VStack(spacing: 12) {
+                            FeatureRow(icon: "brain", text: "AI thông minh tạo roast phù hợp")
+                            FeatureRow(icon: "tag.fill", text: "8 danh mục công việc đa dạng")
+                            FeatureRow(icon: "flame.fill", text: "5 mức độ cay từ nhẹ đến cực")
+                            FeatureRow(icon: "bell.fill", text: "Thông báo định kỳ thông minh")
+                            FeatureRow(icon: "heart.fill", text: "Lưu và chia sẻ roast yêu thích")
+                            FeatureRow(icon: "clock.fill", text: "Lịch sử và tìm kiếm roast")
+                            FeatureRow(icon: "shield.fill", text: "Bộ lọc an toàn nội dung")
+                            FeatureRow(icon: "globe", text: "Tối ưu cho văn hóa Việt Nam")
+                        }
+                    }
+                    .padding(20)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(16)
+
+                    // How it works
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Image(systemName: "gearshape.fill")
+                                .foregroundColor(.orange)
+                            Text("Cách hoạt động")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                        }
+
+                        VStack(spacing: 12) {
+                            HowItWorksStep(number: "1", title: "Chọn danh mục", description: "Deadline, Meeting, KPI, Code Review...")
+                            HowItWorksStep(number: "2", title: "Điều chỉnh độ cay", description: "Từ nhẹ nhàng đến cực cay")
+                            HowItWorksStep(number: "3", title: "AI tạo roast", description: "Câu roast phù hợp và hài hước")
+                            HowItWorksStep(number: "4", title: "Thưởng thức", description: "Copy, chia sẻ, lưu yêu thích")
+                        }
+                    }
+                    .padding(20)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(16)
+
+                    // Developer info
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Image(systemName: "person.fill")
+                                .foregroundColor(.orange)
+                            Text("Đội ngũ phát triển")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                        }
+
+                        Text("Được phát triển bởi đội ngũ RoastMe Team với mong muốn mang lại tiếng cười và giảm stress cho cộng đồng dân văn phòng Việt Nam.")
+                            .font(.body)
+                            .lineSpacing(4)
+
+                        HStack {
+                            Image(systemName: "envelope.fill")
+                                .foregroundColor(.orange)
+                            Text("Liên hệ: roastme.team@gmail.com")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(20)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(16)
+
+                    // Version info - moved to bottom
+                    VStack(spacing: 8) {
+                        Divider()
+
+                        VStack(spacing: 4) {
+                            HStack {
+                                Text("Phiên bản 1.0.0")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                Spacer()
+
+                                Text("© 2024 RoastMe Team")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            HStack {
+                                Text("Yêu cầu iOS 16.5+")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+
+                                Spacer()
+
+                                Text("Tối ưu cho iOS 17.0")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                    }
+                    .padding(.top, 20)
                 }
-                .padding()
+                .padding(20)
             }
             .navigationTitle("Giới Thiệu")
             .navigationBarTitleDisplayMode(.inline)
@@ -337,6 +448,7 @@ struct AboutView: View {
                     Button("Đóng") {
                         dismiss()
                     }
+                    .foregroundColor(.orange)
                 }
             }
         }
@@ -346,13 +458,45 @@ struct AboutView: View {
 struct FeatureRow: View {
     let icon: String
     let text: String
-    
+
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             Image(systemName: icon)
                 .foregroundColor(.orange)
                 .frame(width: 20)
             Text(text)
+                .font(.subheadline)
+            Spacer()
+        }
+    }
+}
+
+struct HowItWorksStep: View {
+    let number: String
+    let title: String
+    let description: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.orange)
+                    .frame(width: 28, height: 28)
+                Text(number)
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Text(description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
             Spacer()
         }
     }

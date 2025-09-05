@@ -179,15 +179,15 @@ struct EmptyFavoritesView: View {
             
             Button(action: onNavigateToRoastGenerator) {
                 HStack {
-                    Image(systemName: "heart")
-                    Text("Tìm Roast Yêu Thích")
+                    Image(systemName: "sparkles")
+                    Text("Tạo Roast Mới")
                 }
                 .font(.headline)
                 .foregroundColor(.white)
                 .padding()
                 .background(
                     LinearGradient(
-                        colors: [.pink, .red],
+                        colors: [.orange, .red],
                         startPoint: .leading,
                         endPoint: .trailing
                     )

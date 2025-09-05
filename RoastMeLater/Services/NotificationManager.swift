@@ -81,7 +81,7 @@ class NotificationManager: ObservableObject {
         
         aiService.generateRoast(
             category: randomCategory,
-            spiceLevel: preferences.spiceLevel,
+            spiceLevel: preferences.defaultSpiceLevel,
             language: preferences.preferredLanguage
         )
         .subscribe(onNext: { [weak self] roast in

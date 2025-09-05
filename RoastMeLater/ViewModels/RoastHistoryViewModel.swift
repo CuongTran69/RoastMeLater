@@ -104,11 +104,16 @@ class RoastHistoryViewModel: ObservableObject {
     }
     
     func toggleFavorite(roast: Roast) {
+        print("🔄 RoastHistoryViewModel.toggleFavorite:")
+        print("  roast.id: \(roast.id)")
+        print("  roast.isFavorite BEFORE: \(roast.isFavorite)")
+
         storageService.toggleFavorite(roastId: roast.id)
-        
+
         // Update local array immediately for better UX
         if let index = roasts.firstIndex(where: { $0.id == roast.id }) {
             roasts[index].isFavorite.toggle()
+            print("  roasts[\(index)].isFavorite AFTER: \(roasts[index].isFavorite)")
             roastsSubject.onNext(roasts)
         }
     }

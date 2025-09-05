@@ -3,8 +3,6 @@ import UIKit
 
 struct RoastGeneratorView: View {
     @StateObject private var viewModel = RoastGeneratorViewModel()
-    @State private var selectedCategory: RoastCategory = .general
-    @State private var spiceLevel: Int = 3
     @State private var showingCategoryPicker = false
     @State private var isGenerating = false
     @State private var showCopySuccess = false
@@ -30,17 +28,24 @@ struct RoastGeneratorView: View {
 
                     // Current Roast Display
                     if let currentRoast = viewModel.currentRoast {
-                        RoastCardView(roast: currentRoast, onFavoriteToggle: {
-                            viewModel.toggleFavorite(roast: currentRoast)
-                        }, onCopy: {
-                            viewModel.copyRoastToClipboard()
-                            showCopySuccess = true
+                        RoastCardView(
+                            roast: currentRoast,
+                            onFavoriteToggle: {
+                                viewModel.toggleFavorite(roast: currentRoast)
+                            },
+                            onCopy: {
+                                viewModel.copyRoastToClipboard()
+                                showCopySuccess = true
 
-                            // Hide the success message after 2 seconds
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                showCopySuccess = false
+                                // Hide the success message after 2 seconds
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                    showCopySuccess = false
+                                }
+                            },
+                            onShare: {
+                                viewModel.shareRoast(currentRoast)
                             }
-                        })
+                        )
                         .transition(.asymmetric(
                             insertion: .scale.combined(with: .opacity),
                             removal: .opacity
@@ -69,11 +74,11 @@ struct RoastGeneratorView: View {
                                 impactFeedback.impactOccurred()
                             }) {
                                 HStack(spacing: 12) {
-                                    Image(systemName: selectedCategory.icon)
+                                    Image(systemName: viewModel.selectedCategory.icon)
                                         .foregroundColor(.orange)
                                         .frame(width: 24, height: 24)
 
-                                    Text(selectedCategory.displayName)
+                                    Text(viewModel.selectedCategory.displayName)
                                         .font(.body)
                                         .fontWeight(.medium)
                                         .foregroundColor(.primary)
@@ -101,7 +106,7 @@ struct RoastGeneratorView: View {
 
                                 Spacer()
 
-                                Text("\(spiceLevel)/5")
+                                Text("\(viewModel.spiceLevel)/5")
                                     .font(.title3)
                                     .fontWeight(.bold)
                                     .foregroundColor(.orange)
@@ -110,22 +115,22 @@ struct RoastGeneratorView: View {
                             HStack(spacing: 8) {
                                 ForEach(1...5, id: \.self) { level in
                                     Button(action: {
-                                        spiceLevel = level
+                                        viewModel.updateSpiceLevel(level)
                                         // Haptic feedback
                                         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                                         impactFeedback.impactOccurred()
                                     }) {
-                                        Image(systemName: level <= spiceLevel ? "flame.fill" : "flame")
+                                        Image(systemName: level <= viewModel.spiceLevel ? "flame.fill" : "flame")
                                             .font(.title2)
-                                            .foregroundColor(level <= spiceLevel ? .orange : .gray.opacity(0.4))
-                                            .scaleEffect(level <= spiceLevel ? 1.1 : 1.0)
-                                            .animation(.easeInOut(duration: 0.2), value: spiceLevel)
+                                            .foregroundColor(level <= viewModel.spiceLevel ? .orange : .gray.opacity(0.4))
+                                            .scaleEffect(level <= viewModel.spiceLevel ? 1.1 : 1.0)
+                                            .animation(.easeInOut(duration: 0.2), value: viewModel.spiceLevel)
                                     }
                                 }
 
                                 Spacer()
 
-                                Text(getSpiceLevelDescription(spiceLevel))
+                                Text(getSpiceLevelDescription(viewModel.spiceLevel))
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                     .italic()
@@ -190,7 +195,12 @@ struct RoastGeneratorView: View {
             .animation(.easeInOut(duration: 0.3), value: showCopySuccess)
         )
         .sheet(isPresented: $showingCategoryPicker) {
-            CategoryPickerView(selectedCategory: $selectedCategory)
+            CategoryPickerView(
+                selectedCategory: viewModel.selectedCategory,
+                onCategorySelected: { category in
+                    viewModel.updateSelectedCategory(category)
+                }
+            )
         }
         .sheet(isPresented: $viewModel.showAPISetup) {
             APISetupView()
@@ -201,7 +211,7 @@ struct RoastGeneratorView: View {
     }
     
     private func generateRoast() {
-        viewModel.generateRoast(category: selectedCategory, spiceLevel: spiceLevel)
+        viewModel.generateRoast(category: viewModel.selectedCategory, spiceLevel: viewModel.spiceLevel)
     }
 
     private func getSpiceLevelDescription(_ level: Int) -> String {
@@ -242,6 +252,7 @@ struct RoastCardView: View {
     let roast: Roast
     let onFavoriteToggle: () -> Void
     let onCopy: () -> Void
+    let onShare: () -> Void
     @State private var showCopyFeedback = false
 
     var body: some View {
@@ -346,6 +357,22 @@ struct RoastCardView: View {
                 }
                 .animation(.easeInOut(duration: 0.2), value: showCopyFeedback)
 
+                // Share button
+                Button(action: onShare) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.caption)
+                        Text("Chia sẻ")
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(.orange)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(6)
+                }
+
                 // Favorite button
                 Button(action: onFavoriteToggle) {
                     HStack(spacing: 4) {
@@ -410,7 +437,8 @@ struct RoastPlaceholderView: View {
 }
 
 struct CategoryPickerView: View {
-    @Binding var selectedCategory: RoastCategory
+    let selectedCategory: RoastCategory
+    let onCategorySelected: (RoastCategory) -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -447,7 +475,7 @@ struct CategoryPickerView: View {
                                 category: category,
                                 isSelected: category == selectedCategory,
                                 onTap: {
-                                    selectedCategory = category
+                                    onCategorySelected(category)
 
                                     // Haptic feedback
                                     let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
@@ -476,11 +504,18 @@ struct CategoryPickerView: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Xong") {
-                        dismiss()
+                    if #available(iOS 16.0, *) {
+                        Button("Xong") {
+                            dismiss()
+                        }
+                        .foregroundColor(.orange)
+                        .fontWeight(.semibold)
+                    } else {
+                        Button("Xong") {
+                            dismiss()
+                        }
+                        .foregroundColor(.orange)
                     }
-                    .foregroundColor(.orange)
-                    .fontWeight(.semibold)
                 }
             }
         }

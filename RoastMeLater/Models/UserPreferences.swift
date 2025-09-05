@@ -1,23 +1,25 @@
 import Foundation
 
 struct UserPreferences: Codable {
-    var spiceLevel: Int
     var preferredLanguage: String
     var notificationsEnabled: Bool
     var notificationFrequency: NotificationFrequency
     var preferredCategories: [RoastCategory]
     var safetyFiltersEnabled: Bool
+    var defaultCategory: RoastCategory
+    var defaultSpiceLevel: Int
 
     // API Configuration
     var apiConfiguration: APIConfiguration
 
     init() {
-        self.spiceLevel = 3
         self.preferredLanguage = "vi"
         self.notificationsEnabled = true
         self.notificationFrequency = .hourly
         self.preferredCategories = RoastCategory.allCases
         self.safetyFiltersEnabled = true
+        self.defaultCategory = .general
+        self.defaultSpiceLevel = 3
         self.apiConfiguration = APIConfiguration()
     }
 }
@@ -25,7 +27,6 @@ struct UserPreferences: Codable {
 struct APIConfiguration: Codable {
     var apiKey: String
     var baseURL: String
-    var useCustomAPI: Bool
 
     // Model cố định - không cần lưu trong preferences
     var modelName: String {
@@ -35,13 +36,11 @@ struct APIConfiguration: Codable {
     init() {
         self.apiKey = ""
         self.baseURL = ""
-        self.useCustomAPI = false
     }
 
     init(apiKey: String, baseURL: String) {
         self.apiKey = apiKey
         self.baseURL = baseURL
-        self.useCustomAPI = !apiKey.isEmpty && !baseURL.isEmpty
     }
 }
 

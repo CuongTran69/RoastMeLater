@@ -118,7 +118,7 @@ class AppLifecycleManager: ObservableObject {
             object: nil,
             userInfo: [
                 "category": randomCategory,
-                "spiceLevel": preferences.spiceLevel
+                "spiceLevel": preferences.defaultSpiceLevel
             ]
         )
     }

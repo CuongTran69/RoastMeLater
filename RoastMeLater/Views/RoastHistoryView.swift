@@ -106,7 +106,7 @@ struct RoastHistoryRowView: View {
                     }
                 }
                 
-                Text(roast.createdAt, style: .relative)
+                Text(formatTimeOnly(roast.createdAt))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -119,30 +119,50 @@ struct RoastHistoryRowView: View {
             HStack {
                 Spacer()
                 
-                Button(action: onFavoriteToggle) {
+                Button(action: {
+                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                    impactFeedback.impactOccurred()
+                    onFavoriteToggle()
+                }) {
                     Image(systemName: roast.isFavorite ? "heart.fill" : "heart")
                         .foregroundColor(roast.isFavorite ? .red : .gray)
+                        .font(.title3)
                 }
-                
-                Button(action: onDelete) {
+                .buttonStyle(PlainButtonStyle())
+
+                Button(action: {
+                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                    impactFeedback.impactOccurred()
+                    onDelete()
+                }) {
                     Image(systemName: "trash")
                         .foregroundColor(.red)
+                        .font(.title3)
                 }
+                .buttonStyle(PlainButtonStyle())
             }
         }
         .padding(.vertical, 4)
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(action: onDelete) {
                 Label("Xóa", systemImage: "trash")
             }
             .tint(.red)
-            
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
             Button(action: onFavoriteToggle) {
-                Label(roast.isFavorite ? "Bỏ thích" : "Yêu thích", 
+                Label(roast.isFavorite ? "Bỏ thích" : "Yêu thích",
                       systemImage: roast.isFavorite ? "heart.slash" : "heart")
             }
             .tint(.orange)
         }
+    }
+
+    private func formatTimeOnly(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
+        return formatter.string(from: date)
     }
 }
 
@@ -167,7 +187,7 @@ struct EmptyHistoryView: View {
             
             Button(action: onNavigateToRoastGenerator) {
                 HStack {
-                    Image(systemName: "plus")
+                    Image(systemName: "sparkles")
                     Text("Tạo Roast Mới")
                 }
                 .font(.headline)

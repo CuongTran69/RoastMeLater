@@ -10,6 +10,8 @@ class RoastGeneratorViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var showError = false
     @Published var showAPISetup = false
+    @Published var selectedCategory: RoastCategory = .general
+    @Published var spiceLevel: Int = 3
     
     // MARK: - Private Properties
     private let aiService: AIServiceProtocol
@@ -41,6 +43,7 @@ class RoastGeneratorViewModel: ObservableObject {
         self.storageService = storageService
 
         setupBindings()
+        loadUserPreferences()
         loadInitialRoast()
     }
     
@@ -70,6 +73,27 @@ class RoastGeneratorViewModel: ObservableObject {
                 self?.currentRoast = roast
             })
             .disposed(by: disposeBag)
+    }
+
+    private func loadUserPreferences() {
+        let preferences = storageService.getUserPreferences()
+        selectedCategory = preferences.defaultCategory
+        spiceLevel = preferences.defaultSpiceLevel
+
+        print("🔄 Loaded user preferences:")
+        print("  selectedCategory: \(selectedCategory.displayName)")
+        print("  spiceLevel: \(spiceLevel)")
+    }
+
+    private func saveUserPreferences() {
+        var preferences = storageService.getUserPreferences()
+        preferences.defaultCategory = selectedCategory
+        preferences.defaultSpiceLevel = spiceLevel
+        storageService.saveUserPreferences(preferences)
+
+        print("💾 Saved user preferences:")
+        print("  selectedCategory: \(selectedCategory.displayName)")
+        print("  spiceLevel: \(spiceLevel)")
     }
 
     private func loadInitialRoast() {
@@ -117,9 +141,10 @@ class RoastGeneratorViewModel: ObservableObject {
         loadingSubject.onNext(true)
 
         print("🎯 Generate Roast - API Config:")
-        print("  useCustomAPI: \(preferences.apiConfiguration.useCustomAPI)")
         print("  apiKey: \(preferences.apiConfiguration.apiKey.isEmpty ? "EMPTY" : "HAS_VALUE")")
         print("  baseURL: \(preferences.apiConfiguration.baseURL)")
+        print("  category: \(category.displayName)")
+        print("  spiceLevel: \(spiceLevel)")
 
         let finalSpiceLevel = preferences.safetyFiltersEnabled ?
             min(spiceLevel, 4) : spiceLevel
@@ -151,7 +176,7 @@ class RoastGeneratorViewModel: ObservableObject {
                 finalRoast = Roast(
                     content: safeContent,
                     category: roast.category,
-                    spiceLevel: min(roast.spiceLevel, 2),
+                    spiceLevel: roast.spiceLevel, // Keep original spice level
                     language: roast.language
                 )
             }
@@ -179,12 +204,17 @@ class RoastGeneratorViewModel: ObservableObject {
     }
     
     func toggleFavorite(roast: Roast) {
+        print("🔄 RoastGeneratorViewModel.toggleFavorite:")
+        print("  roast.id: \(roast.id)")
+        print("  roast.isFavorite BEFORE: \(roast.isFavorite)")
+
         storageService.toggleFavorite(roastId: roast.id)
-        
+
         // Update current roast if it's the same one
         if let currentRoast = currentRoast, currentRoast.id == roast.id {
             var updatedRoast = currentRoast
             updatedRoast.isFavorite.toggle()
+            print("  updatedRoast.isFavorite AFTER: \(updatedRoast.isFavorite)")
             roastSubject.onNext(updatedRoast)
         }
     }
@@ -208,7 +238,7 @@ class RoastGeneratorViewModel: ObservableObject {
 
         generateRoast(
             category: randomCategory,
-            spiceLevel: preferences.spiceLevel,
+            spiceLevel: spiceLevel, // Use current spice level, not preferences
             language: preferences.preferredLanguage
         )
     }
@@ -259,6 +289,49 @@ class RoastGeneratorViewModel: ObservableObject {
         .catch { [weak self] error -> Observable<Roast> in
             self?.handleError(error)
             return Observable.empty()
+        }
+    }
+
+    // MARK: - Public Methods for Preferences
+    func updateSelectedCategory(_ category: RoastCategory) {
+        selectedCategory = category
+        saveUserPreferences()
+    }
+
+    func updateSpiceLevel(_ level: Int) {
+        spiceLevel = level
+        saveUserPreferences()
+    }
+
+    func shareRoast(_ roast: Roast) {
+        let shareText = """
+        🔥 RoastMe - \(roast.category.displayName)
+
+        \(roast.content)
+
+        Mức độ cay: \(String(repeating: "🔥", count: roast.spiceLevel))
+
+        Tạo roast của bạn với RoastMe!
+        """
+
+        let activityViewController = UIActivityViewController(
+            activityItems: [shareText],
+            applicationActivities: nil
+        )
+
+        // Get the root view controller
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first,
+           let rootViewController = window.rootViewController {
+
+            // For iPad
+            if let popover = activityViewController.popoverPresentationController {
+                popover.sourceView = rootViewController.view
+                popover.sourceRect = CGRect(x: rootViewController.view.bounds.midX, y: rootViewController.view.bounds.midY, width: 0, height: 0)
+                popover.permittedArrowDirections = []
+            }
+
+            rootViewController.present(activityViewController, animated: true)
         }
     }
 }
