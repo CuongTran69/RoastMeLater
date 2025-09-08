@@ -13,6 +13,7 @@ struct SettingsView: View {
                 Section("Thông Báo") {
                     Toggle("Bật thông báo", isOn: $viewModel.notificationsEnabled)
                         .onChange(of: viewModel.notificationsEnabled) { enabled in
+                            viewModel.updateNotificationsEnabled(enabled)
                             if enabled {
                                 notificationManager.requestNotificationPermission()
                             } else {
@@ -26,7 +27,9 @@ struct SettingsView: View {
                                 Text(frequency.displayName).tag(frequency)
                             }
                         }
-                        .onChange(of: viewModel.notificationFrequency) { _ in
+                        .pickerStyle(MenuPickerStyle())
+                        .onChange(of: viewModel.notificationFrequency) { newValue in
+                            viewModel.updateNotificationFrequency(newValue)
                             notificationManager.scheduleHourlyNotifications()
                         }
                         
@@ -53,7 +56,7 @@ struct SettingsView: View {
                                 Image(systemName: level <= viewModel.defaultSpiceLevel ? "flame.fill" : "flame")
                                     .foregroundColor(level <= viewModel.defaultSpiceLevel ? .orange : .gray)
                                     .onTapGesture {
-                                        viewModel.defaultSpiceLevel = level
+                                        viewModel.updateDefaultSpiceLevel(level)
                                     }
                             }
                         }
@@ -61,10 +64,17 @@ struct SettingsView: View {
                     .padding(.vertical, 4)
                     
                     Toggle("Bộ lọc an toàn", isOn: $viewModel.safetyFiltersEnabled)
+                        .onChange(of: viewModel.safetyFiltersEnabled) { enabled in
+                            viewModel.updateSafetyFilters(enabled)
+                        }
                     
                     Picker("Ngôn ngữ", selection: $viewModel.preferredLanguage) {
                         Text("Tiếng Việt").tag("vi")
                         Text("English").tag("en")
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                    .onChange(of: viewModel.preferredLanguage) { newValue in
+                        viewModel.updatePreferredLanguage(newValue)
                     }
                 }
                 
