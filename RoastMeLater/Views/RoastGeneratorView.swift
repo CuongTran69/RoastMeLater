@@ -26,33 +26,35 @@ struct RoastGeneratorView: View {
                     }
                     .padding(.top, 10)
 
-                    // Current Roast Display
-                    if let currentRoast = viewModel.currentRoast {
-                        RoastCardView(
-                            roast: currentRoast,
-                            onFavoriteToggle: {
-                                viewModel.toggleFavorite(roast: currentRoast)
-                            },
-                            onCopy: {
-                                viewModel.copyRoastToClipboard()
-                                showCopySuccess = true
+                    // Current Roast Display - Only show ONE roast at a time
+                    Group {
+                        if let currentRoast = viewModel.currentRoast {
+                            RoastCardView(
+                                roast: currentRoast,
+                                onFavoriteToggle: {
+                                    viewModel.toggleFavorite(roast: currentRoast)
+                                },
+                                onCopy: {
+                                    viewModel.copyRoastToClipboard()
+                                    showCopySuccess = true
 
-                                // Hide the success message after 2 seconds
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                    showCopySuccess = false
+                                    // Hide the success message after 2 seconds
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                        showCopySuccess = false
+                                    }
+                                },
+                                onShare: {
+                                    viewModel.shareRoast(currentRoast)
                                 }
-                            },
-                            onShare: {
-                                viewModel.shareRoast(currentRoast)
-                            }
-                        )
-                        .transition(.asymmetric(
-                            insertion: .scale.combined(with: .opacity),
-                            removal: .opacity
-                        ))
-                    } else {
-                        RoastPlaceholderView()
+                            )
+                            .id(currentRoast.id) // Force view recreation when roast changes
+                        } else {
+                            RoastPlaceholderView()
+                                .id("placeholder") // Unique ID for placeholder
+                        }
                     }
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    .animation(.easeInOut(duration: 0.4), value: viewModel.currentRoast?.id)
                 
                     // Controls Section
                     VStack(spacing: 20) {
@@ -211,7 +213,15 @@ struct RoastGeneratorView: View {
     }
     
     private func generateRoast() {
-        viewModel.generateRoast(category: viewModel.selectedCategory, spiceLevel: viewModel.spiceLevel)
+        // Clear current roast first to ensure only new roast is shown
+        withAnimation(.easeOut(duration: 0.2)) {
+            viewModel.clearCurrentRoast()
+        }
+
+        // Generate new roast after a brief delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            viewModel.generateRoast(category: viewModel.selectedCategory, spiceLevel: viewModel.spiceLevel)
+        }
     }
 
     private func getSpiceLevelDescription(_ level: Int) -> String {
@@ -320,73 +330,24 @@ struct RoastCardView: View {
                     )
             }
 
-            // Action buttons with better UX
-            HStack(spacing: 16) {
-                // Timestamp
-                HStack(spacing: 4) {
-                    Image(systemName: "clock")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    Text(roast.createdAt, style: .time)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+            // Action buttons with responsive layout
+            VStack(spacing: 12) {
+                // Timestamp row
+                HStack {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(roast.createdAt, style: .time)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
                 }
 
-                Spacer()
-
-                // Copy button
-                Button(action: {
-                    onCopy()
-                    showCopyFeedback = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        showCopyFeedback = false
-                    }
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: showCopyFeedback ? "checkmark" : "doc.on.doc")
-                            .font(.caption)
-                        Text(showCopyFeedback ? "Đã copy!" : "Copy")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                    }
-                    .foregroundColor(showCopyFeedback ? .green : .blue)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(6)
-                }
-                .animation(.easeInOut(duration: 0.2), value: showCopyFeedback)
-
-                // Share button
-                Button(action: onShare) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.caption)
-                        Text("Chia sẻ")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                    }
-                    .foregroundColor(.orange)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(6)
-                }
-
-                // Favorite button
-                Button(action: onFavoriteToggle) {
-                    HStack(spacing: 4) {
-                        Image(systemName: roast.isFavorite ? "heart.fill" : "heart")
-                            .font(.caption)
-                        Text(roast.isFavorite ? "Đã thích" : "Thích")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                    }
-                    .foregroundColor(roast.isFavorite ? .red : .gray)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(6)
+                // Action buttons - responsive layout
+                HStack(spacing: 12) {
+                    actionButtons
                 }
             }
         }
@@ -401,6 +362,78 @@ struct RoastCardView: View {
                 .stroke(Color.orange.opacity(0.2), lineWidth: 1)
         )
         .padding(.horizontal)
+    }
+
+    // MARK: - Action Button Components
+    @ViewBuilder
+    private var actionButtons: some View {
+        // Use flexible layout that wraps naturally on small screens
+        HStack(spacing: 8) {
+            copyButton
+                .layoutPriority(1)
+            shareButton
+                .layoutPriority(1)
+            favoriteButton
+                .layoutPriority(1)
+        }
+    }
+
+    private var copyButton: some View {
+        Button(action: {
+            onCopy()
+            showCopyFeedback = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                showCopyFeedback = false
+            }
+        }) {
+            HStack(spacing: 3) {
+                Image(systemName: showCopyFeedback ? "checkmark" : "doc.on.doc")
+                    .font(.caption)
+                Text(showCopyFeedback ? "Copied!" : "Copy")
+                    .font(.caption2)
+                    .fontWeight(.medium)
+            }
+            .foregroundColor(showCopyFeedback ? .green : .blue)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color(.systemGray6))
+            .cornerRadius(6)
+        }
+        .animation(.easeInOut(duration: 0.2), value: showCopyFeedback)
+    }
+
+    private var shareButton: some View {
+        Button(action: onShare) {
+            HStack(spacing: 3) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.caption)
+                Text("Share")
+                    .font(.caption2)
+                    .fontWeight(.medium)
+            }
+            .foregroundColor(.orange)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color(.systemGray6))
+            .cornerRadius(6)
+        }
+    }
+
+    private var favoriteButton: some View {
+        Button(action: onFavoriteToggle) {
+            HStack(spacing: 3) {
+                Image(systemName: roast.isFavorite ? "heart.fill" : "heart")
+                    .font(.caption)
+                Text(roast.isFavorite ? "Liked" : "Like")
+                    .font(.caption2)
+                    .fontWeight(.medium)
+            }
+            .foregroundColor(roast.isFavorite ? .red : .gray)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color(.systemGray6))
+            .cornerRadius(6)
+        }
     }
 
     private func getFlameColor(_ level: Int) -> Color {

@@ -159,7 +159,7 @@ struct SettingsView: View {
                             Text("Model")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
-                            Text("anthropic:3.7-sonnet")
+                            Text("deepseek:deepseek-v3")
                                 .font(.body)
                                 .foregroundColor(.primary)
                                 .padding(.vertical, 8)

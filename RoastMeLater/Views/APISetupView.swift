@@ -72,7 +72,7 @@ struct APISetupView: View {
                             .font(.headline)
                             .fontWeight(.semibold)
                         
-                        Text("anthropic:3.7-sonnet")
+                        Text("deepseek:deepseek-v3")
                             .font(.system(.body, design: .monospaced))
                             .foregroundColor(.primary)
                             .padding()

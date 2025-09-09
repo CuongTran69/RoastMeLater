@@ -8,15 +8,15 @@ class APITestHelper {
     
     private init() {}
     
-    /// Test API connection với model cố định anthropic:3.7-sonnet
+    /// Test API connection với model cố định deepseek:deepseek-v3
     /// - Parameters:
     ///   - apiKey: API key
     ///   - baseURL: Base URL của API
-    ///   - modelName: Tên model (luôn sử dụng "anthropic:3.7-sonnet")
+    ///   - modelName: Tên model (luôn sử dụng "deepseek:deepseek-v3")
     /// - Returns: Observable<Bool> indicating success/failure
     func testAPIConnection(apiKey: String, baseURL: String, modelName: String) -> Observable<Bool> {
         return Observable.create { observer in
-            let effectiveModelName = "anthropic:3.7-sonnet" // Cố định model
+            let effectiveModelName = "deepseek:deepseek-v3" // Cố định model
             
             guard let url = URL(string: baseURL) else {
                 print("❌ Invalid base URL: \(baseURL)")

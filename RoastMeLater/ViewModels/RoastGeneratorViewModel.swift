@@ -2,6 +2,7 @@ import Foundation
 import RxSwift
 import RxCocoa
 import UIKit
+import Combine
 
 class RoastGeneratorViewModel: ObservableObject {
     // MARK: - Published Properties
@@ -18,6 +19,7 @@ class RoastGeneratorViewModel: ObservableObject {
     private let storageService: StorageServiceProtocol
     private let safetyFilter = SafetyFilter()
     private let disposeBag = DisposeBag()
+    private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Reactive Properties
     private let loadingSubject = BehaviorSubject<Bool>(value: false)
@@ -56,7 +58,7 @@ class RoastGeneratorViewModel: ObservableObject {
                 self?.isLoading = isLoading
             })
             .disposed(by: disposeBag)
-        
+
         // Bind error state
         error
             .observe(on: MainScheduler.instance)
@@ -65,7 +67,7 @@ class RoastGeneratorViewModel: ObservableObject {
                 self?.showError = true
             })
             .disposed(by: disposeBag)
-        
+
         // Bind roast state
         roast
             .observe(on: MainScheduler.instance)
@@ -73,6 +75,20 @@ class RoastGeneratorViewModel: ObservableObject {
                 self?.currentRoast = roast
             })
             .disposed(by: disposeBag)
+
+        // Listen for settings changes to sync spice level
+        NotificationCenter.default.publisher(for: .settingsDidChange)
+            .sink { [weak self] _ in
+                self?.loadUserPreferences()
+            }
+            .store(in: &cancellables)
+
+        // Listen for favorite changes to sync current roast
+        NotificationCenter.default.publisher(for: .favoriteDidChange)
+            .sink { [weak self] notification in
+                self?.handleFavoriteChange(notification)
+            }
+            .store(in: &cancellables)
     }
 
     private func loadUserPreferences() {
@@ -83,6 +99,25 @@ class RoastGeneratorViewModel: ObservableObject {
         print("🔄 Loaded user preferences:")
         print("  selectedCategory: \(selectedCategory.displayName)")
         print("  spiceLevel: \(spiceLevel)")
+    }
+
+    private func handleFavoriteChange(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let roastId = userInfo["roastId"] as? UUID,
+              let isFavorite = userInfo["isFavorite"] as? Bool,
+              let updatedRoast = userInfo["roast"] as? Roast,
+              let currentRoast = currentRoast,
+              currentRoast.id == roastId else { return }
+
+        print("🔄 RoastGeneratorViewModel.handleFavoriteChange:")
+        print("  roastId: \(roastId)")
+        print("  isFavorite: \(isFavorite)")
+
+        // Update current roast with new favorite status
+        var newRoast = currentRoast
+        newRoast.isFavorite = isFavorite
+        roastSubject.onNext(newRoast)
+        self.currentRoast = newRoast
     }
 
     private func saveUserPreferences() {

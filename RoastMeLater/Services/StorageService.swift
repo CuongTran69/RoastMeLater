@@ -90,6 +90,17 @@ class StorageService: StorageServiceProtocol {
             let favorites = getFavoriteRoasts()
             print("  favorites count: \(favorites.count)")
             favoritesSubject.onNext(favorites)
+
+            // ✅ Notify all ViewModels about favorite change
+            NotificationCenter.default.post(
+                name: .favoriteDidChange,
+                object: nil,
+                userInfo: [
+                    "roastId": roastId,
+                    "isFavorite": newValue,
+                    "roast": history[index]
+                ]
+            )
         } else {
             print("❌ StorageService.toggleFavorite: Roast not found with id \(roastId)")
         }

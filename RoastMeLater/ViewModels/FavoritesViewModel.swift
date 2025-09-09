@@ -1,6 +1,7 @@
 import Foundation
 import RxSwift
 import RxCocoa
+import Combine
 
 class FavoritesViewModel: ObservableObject {
     // MARK: - Published Properties
@@ -12,6 +13,7 @@ class FavoritesViewModel: ObservableObject {
     // MARK: - Private Properties
     private let storageService: StorageServiceProtocol
     private let disposeBag = DisposeBag()
+    private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Reactive Properties
     private let favoritesSubject = BehaviorSubject<[Roast]>(value: [])
@@ -86,6 +88,13 @@ class FavoritesViewModel: ObservableObject {
                 self?.showError = true
             })
             .disposed(by: disposeBag)
+
+        // Listen for favorite changes from other ViewModels
+        NotificationCenter.default.publisher(for: .favoriteDidChange)
+            .sink { [weak self] notification in
+                self?.handleFavoriteChange(notification)
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Public Methods
@@ -112,10 +121,31 @@ class FavoritesViewModel: ObservableObject {
         print("  favoriteRoasts count BEFORE: \(favoriteRoasts.count)")
 
         storageService.toggleFavorite(roastId: roast.id)
+        // Note: Local update will be handled by handleFavoriteChange via notification
+    }
 
-        // Update local array immediately for better UX
-        // Since we're in favorites view, toggling will always remove from favorites
-        favoriteRoasts.removeAll { $0.id == roast.id }
+    private func handleFavoriteChange(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let roastId = userInfo["roastId"] as? UUID,
+              let isFavorite = userInfo["isFavorite"] as? Bool else { return }
+
+        print("🔄 FavoritesViewModel.handleFavoriteChange:")
+        print("  roastId: \(roastId)")
+        print("  isFavorite: \(isFavorite)")
+        print("  favoriteRoasts count BEFORE: \(favoriteRoasts.count)")
+
+        if isFavorite {
+            // Add to favorites if not already present
+            if !favoriteRoasts.contains(where: { $0.id == roastId }) {
+                if let updatedRoast = userInfo["roast"] as? Roast {
+                    favoriteRoasts.insert(updatedRoast, at: 0) // Add to beginning
+                }
+            }
+        } else {
+            // Remove from favorites
+            favoriteRoasts.removeAll { $0.id == roastId }
+        }
+
         print("  favoriteRoasts count AFTER: \(favoriteRoasts.count)")
         favoritesSubject.onNext(favoriteRoasts)
     }

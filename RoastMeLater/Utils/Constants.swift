@@ -10,8 +10,8 @@ struct Constants {
         static let bundleIdentifier = "com.roastme.app"
         static let supportEmail = "support@roastme.app"
         static let appStoreURL = "https://apps.apple.com/app/roastme"
-        static let minimumIOSVersion = "16.5"
-        static let targetIOSVersion = "17.0"
+        static let minimumIOSVersion = "15.6"
+        static let targetIOSVersion = "16.0"
     }
     
     // MARK: - API Configuration
@@ -22,7 +22,7 @@ struct Constants {
 
         // Custom LLM configuration
         static let defaultBaseURL = ""  // Will be set from user preferences
-        static let fixedModel = "anthropic:3.7-sonnet"  // Fixed model - không thay đổi
+        static let fixedModel = "deepseek:deepseek-v3"  // Fixed model - không thay đổi
 
         // Request configuration
         static let requestTimeout: TimeInterval = 30.0
@@ -48,6 +48,13 @@ struct Constants {
         static let viewHistoryActionIdentifier = "VIEW_HISTORY"
         static let maxPendingNotifications = 64 // iOS limit
         static let defaultScheduleHours = 24
+    }
+
+    // MARK: - Notification Names
+    struct NotificationNames {
+        static let settingsDidChange = "settingsDidChange"
+        static let favoriteDidChange = "favoriteDidChange"
+        static let roastDataDidChange = "roastDataDidChange"
     }
     
     // MARK: - UI Configuration
@@ -202,4 +209,11 @@ extension Constants {
         return false
         #endif
     }
+}
+
+// MARK: - Notification.Name Extensions
+extension Notification.Name {
+    static let settingsDidChange = Notification.Name(Constants.NotificationNames.settingsDidChange)
+    static let favoriteDidChange = Notification.Name(Constants.NotificationNames.favoriteDidChange)
+    static let roastDataDidChange = Notification.Name(Constants.NotificationNames.roastDataDidChange)
 }

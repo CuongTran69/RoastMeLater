@@ -135,85 +135,277 @@ class AIService: AIServiceProtocol {
             // Simulate network delay
             DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) {
                 let mockRoasts = self.getMockRoasts(for: category, spiceLevel: spiceLevel)
-                let randomRoast = mockRoasts.randomElement() ?? "Bạn làm việc chăm chỉ như một con ốc sên đang thi chạy marathon!"
-                
+                let randomRoast = mockRoasts.randomElement() ?? "Bạn làm việc chăm chỉ như một con ốc sên đang thi chạy marathon! 🐌"
+
+                print("🎭 Generated mock roast:")
+                print("  category: \(category.displayName)")
+                print("  requestedSpiceLevel: \(spiceLevel)")
+                print("  content: \(randomRoast)")
+
                 let roast = Roast(
                     content: randomRoast,
                     category: category,
                     spiceLevel: spiceLevel,
                     language: language
                 )
-                
+
                 observer.onNext(roast)
                 observer.onCompleted()
             }
-            
+
             return Disposables.create()
         }
     }
     
     private func createPrompt(category: RoastCategory, spiceLevel: Int, language: String) -> String {
-        let categoryDescription = category.description
-        let spiceLevelDescription = getSpiceLevelDescription(spiceLevel)
-        
+        let categoryContext = getCategoryContext(category)
+        let spiceLevelGuidance = getSpiceLevelGuidance(spiceLevel)
+        let languageInstruction = getLanguageInstruction(language)
+
         return """
-        Tạo một câu roast tiếng Việt về \(categoryDescription) với mức độ \(spiceLevelDescription).
-        
-        Yêu cầu:
-        - Phù hợp với môi trường văn phòng
-        - Hài hước nhưng không xúc phạm
-        - Độ dài 1-2 câu
-        - Sử dụng tiếng Việt tự nhiên
-        - Mức độ cay: \(spiceLevel)/5
-        
-        Chỉ trả về nội dung roast, không cần giải thích thêm.
+        \(languageInstruction)
+
+        Chủ đề: \(categoryContext.topic)
+        Bối cảnh: \(categoryContext.context)
+        Mức độ: \(spiceLevelGuidance.description) (\(spiceLevel)/5)
+
+        Hướng dẫn tạo roast:
+        \(spiceLevelGuidance.guidelines)
+
+        Yêu cầu kỹ thuật:
+        - Độ dài: 15-40 từ (1-2 câu ngắn gọn)
+        - Phong cách: \(spiceLevelGuidance.style)
+        - Tông điệu: \(spiceLevelGuidance.tone)
+        - Sử dụng: \(categoryContext.examples.randomElement() ?? "ví dụ thực tế")
+        - Tránh: từ ngữ thô tục, xúc phạm cá nhân, nội dung nhạy cảm
+
+        Chỉ trả về nội dung roast hoàn chỉnh, không giải thích.
         """
     }
     
-    private func getSpiceLevelDescription(_ level: Int) -> String {
+    private func getLanguageInstruction(_ language: String) -> String {
+        switch language.lowercased() {
+        case "vi", "vietnamese":
+            return "Tạo một câu roast bằng tiếng Việt tự nhiên, sử dụng từ ngữ phù hợp với văn hóa Việt Nam và môi trường công sở."
+        case "en", "english":
+            return "Create a witty roast in English suitable for office environment and professional context."
+        default:
+            return "Tạo một câu roast bằng tiếng Việt tự nhiên, sử dụng từ ngữ phù hợp với văn hóa Việt Nam và môi trường công sở."
+        }
+    }
+
+    private func getCategoryContext(_ category: RoastCategory) -> (topic: String, context: String, examples: [String]) {
+        switch category {
+        case .deadlines:
+            return (
+                topic: "Deadline và quản lý thời gian",
+                context: "Những tình huống về deadline trễ, quản lý thời gian kém, hoặc ước tính thời gian không chính xác trong công việc",
+                examples: ["deadline như gợi ý", "làm việc như rùa", "thời gian là tương đối", "deadline chỉ là con số"]
+            )
+        case .meetings:
+            return (
+                topic: "Cuộc họp và meeting",
+                context: "Những tình huống về meeting dài, không hiệu quả, hoặc quá nhiều cuộc họp không cần thiết",
+                examples: ["meeting marathon", "họp để họp", "cuộc họp vô tận", "meeting như phim dài"]
+            )
+        case .kpis:
+            return (
+                topic: "KPI và hiệu suất làm việc",
+                context: "Những tình huống về KPI không đạt, chỉ số hiệu suất thấp, hoặc áp lực về target",
+                examples: ["KPI như WiFi", "target như ước mơ", "hiệu suất biến động", "chỉ số thần thoại"]
+            )
+        case .codeReviews:
+            return (
+                topic: "Code review và technical review",
+                context: "Những tình huống về code review khó khăn, bug nhiều, hoặc technical debt",
+                examples: ["code như mê cung", "bug như sao trời", "review như phẫu thuật", "code spaghetti"]
+            )
+        case .workload:
+            return (
+                topic: "Khối lượng công việc và áp lực",
+                context: "Những tình huống về công việc quá tải, stress, hoặc work-life balance kém",
+                examples: ["việc như núi", "stress như áp suất", "làm việc 24/7", "burnout syndrome"]
+            )
+        case .colleagues:
+            return (
+                topic: "Đồng nghiệp và teamwork",
+                context: "Những tình huống về làm việc nhóm, communication, hoặc dynamic trong team",
+                examples: ["teamwork như solo", "communication như mã morse", "đồng nghiệp như alien", "team spirit"]
+            )
+        case .management:
+            return (
+                topic: "Quản lý và leadership",
+                context: "Những tình huống về phong cách quản lý, decision making, hoặc leadership skills",
+                examples: ["quản lý như GPS hỏng", "quyết định như tung xu", "leadership như mù đường", "micro-management"]
+            )
+        case .general:
+            return (
+                topic: "Công việc văn phòng nói chung",
+                context: "Những tình huống chung về cuộc sống văn phòng, corporate culture, hoặc work habits",
+                examples: ["văn phòng như rạp xiếc", "corporate life", "9-to-5 lifestyle", "office politics"]
+            )
+        }
+    }
+
+    private func getSpiceLevelGuidance(_ level: Int) -> (description: String, style: String, tone: String, guidelines: String) {
         switch level {
-        case 1: return "nhẹ nhàng, dễ thương"
-        case 2: return "vừa phải, hài hước"
-        case 3: return "trung bình, châm biếm"
-        case 4: return "cay nồng, sắc sảo"
-        case 5: return "cực cay, thẳng thắn"
-        default: return "trung bình"
+        case 1:
+            return (
+                description: "Nhẹ nhàng, dễ thương",
+                style: "Hài hước nhẹ nhàng, đáng yêu",
+                tone: "Thân thiện, vui vẻ, không gây tổn thương",
+                guidelines: "- Sử dụng so sánh dễ thương, hình ảnh đáng yêu\n- Tập trung vào tình huống hài hước thay vì chỉ trích\n- Giữ tông điệu tích cực và khuyến khích"
+            )
+        case 2:
+            return (
+                description: "Vừa phải, hài hước",
+                style: "Hài hước thông minh, witty",
+                tone: "Vui tươi, sáng tạo, có chút tinh nghịch",
+                guidelines: "- Sử dụng wordplay, pun, hoặc double meaning\n- So sánh với những tình huống quen thuộc\n- Giữ sự cân bằng giữa hài hước và tôn trọng"
+            )
+        case 3:
+            return (
+                description: "Trung bình, châm biếm",
+                style: "Châm biếm thông minh, sarcastic",
+                tone: "Hơi chua cay, nhưng vẫn chấp nhận được",
+                guidelines: "- Sử dụng irony và sarcasm một cách khéo léo\n- Chỉ ra sự mâu thuẫn hoặc absurdity trong tình huống\n- Giữ ranh giới giữa châm biếm và xúc phạm"
+            )
+        case 4:
+            return (
+                description: "Cay nồng, sắc sảo",
+                style: "Sắc sảo, thẳng thắn, có edge",
+                tone: "Cứng rắn, direct, nhưng vẫn professional",
+                guidelines: "- Sử dụng ngôn từ mạnh mẽ nhưng không thô tục\n- Chỉ trích trực tiếp nhưng tập trung vào hành vi, không phải cá nhân\n- Có thể gây shock nhẹ nhưng vẫn trong giới hạn chấp nhận"
+            )
+        case 5:
+            return (
+                description: "Cực cay, thẳng thắn",
+                style: "Brutal honesty, không mercy",
+                tone: "Thẳng thắn tối đa, savage nhưng vẫn clever",
+                guidelines: "- Sử dụng ngôn từ mạnh nhất có thể trong giới hạn professional\n- Không giữ lại gì, nói thẳng sự thật\n- Có thể gây shock mạnh nhưng vẫn phải thông minh và witty"
+            )
+        default:
+            return (
+                description: "Trung bình",
+                style: "Cân bằng",
+                tone: "Vừa phải",
+                guidelines: "- Giữ cân bằng giữa hài hước và tôn trọng"
+            )
         }
     }
     
     private func getMockRoasts(for category: RoastCategory, spiceLevel: Int) -> [String] {
+        let roasts = getMockRoastsByCategory(category)
+
+        // Filter roasts by spice level appropriateness
+        let filteredRoasts = roasts.filter { roast in
+            let roastSpiceLevel = estimateSpiceLevel(roast.content)
+            return abs(roastSpiceLevel - spiceLevel) <= 1 // Allow ±1 level tolerance
+        }
+
+        // Extract content strings from tuples
+        let finalRoasts = filteredRoasts.isEmpty ? roasts : filteredRoasts
+        return finalRoasts.map { $0.content }
+    }
+
+    private func getMockRoastsByCategory(_ category: RoastCategory) -> [(content: String, spiceLevel: Int)] {
         switch category {
         case .deadlines:
             return [
-                "Deadline của bạn như lời hứa của chính trị gia - nghe hay nhưng khó tin!",
-                "Bạn làm việc với deadline như rùa đua với thỏ, nhưng không có kết thúc có hậu!",
-                "Deadline trong mắt bạn chỉ là... gợi ý, phải không?"
+                ("Deadline của bạn như lời hứa chính trị gia - nghe hay nhưng ai tin? 🤔", 3),
+                ("Bạn làm việc với deadline như rùa thi chạy marathon! 🐢", 2),
+                ("Deadline trong mắt bạn chỉ là... gợi ý nhẹ nhàng thôi! 😊", 1),
+                ("Deadline? Bạn nghĩ nó là deadline suggestion à? 😏", 4),
+                ("Bạn và deadline như parallel lines - không bao giờ gặp nhau! 💀", 5)
             ]
         case .meetings:
             return [
-                "Meeting của bạn dài hơn cả phim Titanic, nhưng ít drama hơn!",
-                "Cuộc họp của bạn như WiFi công ty - luôn chậm và hay bị gián đoạn!",
-                "Bạn họp nhiều đến nỗi có thể mở công ty tư vấn về... cách họp!"
+                ("Meeting của bạn dài hơn phim Titanic nhưng ít drama hơn! 🎬", 3),
+                ("Cuộc họp như WiFi công ty - chậm và hay bị gián đoạn! 📶", 2),
+                ("Bạn họp nhiều đến mức có thể mở khóa học 'Nghệ thuật họp hành'! 😄", 1),
+                ("Meeting với bạn = torture session không lương! 😤", 4),
+                ("Bạn họp để họp, họp để... quên mình đang họp gì! 🤯", 5)
             ]
         case .kpis:
             return [
-                "KPI của bạn như WiFi nhà hàng xóm - luôn yếu và không ổn định!",
-                "Chỉ số của bạn tăng chậm như giá xăng... à không, giá xăng tăng nhanh hơn!",
-                "KPI của bạn như thời tiết Sài Gòn - khó đoán và hay thay đổi!"
+                ("KPI của bạn như WiFi hàng xóm - yếu và không ổn định! 📊", 3),
+                ("Chỉ số của bạn tăng chậm như... rùa leo núi! 🐢⛰️", 2),
+                ("KPI của bạn đáng yêu như em bé học bò! 👶", 1),
+                ("KPI của bạn flatter hơn cả đường thẳng! 📉", 4),
+                ("Target của bạn như unicorn - ai cũng nghe nhưng chưa ai thấy! 🦄", 5)
             ]
         case .codeReviews:
             return [
-                "Code review của bạn như đi khám bệnh - ai cũng sợ nhưng cần thiết!",
-                "Code của bạn như món phở - càng review càng thấy thiếu gia vị!",
-                "Review code của bạn như giải mã hieroglyph Ai Cập!"
+                ("Code review như đi khám bệnh - sợ nhưng cần thiết! 👨‍⚕️", 3),
+                ("Code của bạn như món phở - càng review càng thấy thiếu gia vị! 🍜", 2),
+                ("Code của bạn cute như hello world đầu tiên! 💕", 1),
+                ("Review code của bạn = giải mã hieroglyph Ai Cập! 🔍", 4),
+                ("Code của bạn là definition của 'spaghetti code'! 🍝💀", 5)
             ]
-        default:
+        case .workload:
             return [
-                "Bạn làm việc chăm chỉ như một con ốc sên đang thi chạy marathon!",
-                "Hiệu suất làm việc của bạn như internet Việt Nam - có lúc nhanh, có lúc... chậm!",
-                "Bạn multitask như Windows 95 - cố gắng nhưng hay bị treo!"
+                ("Workload của bạn như núi Everest - nhìn thôi đã mệt! ⛰️", 3),
+                ("Bạn multitask như... single-task với extra steps! 🤹", 2),
+                ("Công việc của bạn nhiều như sao trời, cute như sao nhí! ⭐", 1),
+                ("Work-life balance của bạn = 99% work, 1% thinking about life! ⚖️", 4),
+                ("Bạn làm việc 25/8 - vượt cả giới hạn thời gian! ⏰💀", 5)
+            ]
+        case .colleagues:
+            return [
+                ("Teamwork với bạn như chơi game solo nhưng có audience! 🎮", 3),
+                ("Communication skills của bạn như... mã morse thời hiện đại! 📡", 2),
+                ("Bạn là teammate đáng yêu như mascot của team! 🧸", 1),
+                ("Collaboration với bạn = mission impossible! 🕵️", 4),
+                ("Bạn làm việc nhóm như... alien trying to blend in! 👽", 5)
+            ]
+        case .management:
+            return [
+                ("Leadership style của bạn như GPS hỏng - dẫn đường lung tung! 🧭", 3),
+                ("Bạn quản lý như... shepherd mà cừu đi lạc hết! 🐑", 2),
+                ("Phong cách quản lý của bạn warm như hot chocolate! ☕", 1),
+                ("Management skills của bạn = chaos theory in action! 🌪️", 4),
+                ("Bạn lead team như blind person leading the blind! 🦯💀", 5)
+            ]
+        case .general:
+            return [
+                ("Bạn làm việc chăm chỉ như ốc sên thi marathon! 🐌", 2),
+                ("Office life với bạn như sitcom không có tiếng cười! 📺", 3),
+                ("Bạn là sunshine của văn phòng! ☀️😊", 1),
+                ("Productivity của bạn = internet explorer của con người! 🐌💻", 4),
+                ("Bạn là living proof rằng evolution có thể đi backwards! 🦕💀", 5)
             ]
         }
+    }
+
+    private func estimateSpiceLevel(_ content: String) -> Int {
+        let lowercased = content.lowercased()
+
+        // Level 5 indicators
+        if lowercased.contains("💀") || lowercased.contains("backwards") ||
+           lowercased.contains("blind") || lowercased.contains("alien") {
+            return 5
+        }
+
+        // Level 4 indicators
+        if lowercased.contains("impossible") || lowercased.contains("chaos") ||
+           lowercased.contains("torture") || lowercased.contains("flatter") {
+            return 4
+        }
+
+        // Level 1 indicators
+        if lowercased.contains("cute") || lowercased.contains("đáng yêu") ||
+           lowercased.contains("😊") || lowercased.contains("💕") {
+            return 1
+        }
+
+        // Level 2 indicators
+        if lowercased.contains("🐢") || lowercased.contains("😄") ||
+           lowercased.contains("single-task") {
+            return 2
+        }
+
+        // Default to level 3
+        return 3
     }
 
     // MARK: - API Testing

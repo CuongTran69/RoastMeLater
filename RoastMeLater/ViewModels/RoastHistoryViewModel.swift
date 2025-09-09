@@ -1,6 +1,7 @@
 import Foundation
 import RxSwift
 import RxCocoa
+import Combine
 
 class RoastHistoryViewModel: ObservableObject {
     // MARK: - Published Properties
@@ -12,6 +13,7 @@ class RoastHistoryViewModel: ObservableObject {
     // MARK: - Private Properties
     private let storageService: StorageServiceProtocol
     private let disposeBag = DisposeBag()
+    private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Reactive Properties
     private let roastsSubject = BehaviorSubject<[Roast]>(value: [])
@@ -84,6 +86,13 @@ class RoastHistoryViewModel: ObservableObject {
                 self?.showError = true
             })
             .disposed(by: disposeBag)
+
+        // Listen for favorite changes from other ViewModels
+        NotificationCenter.default.publisher(for: .favoriteDidChange)
+            .sink { [weak self] notification in
+                self?.handleFavoriteChange(notification)
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Public Methods
@@ -109,11 +118,22 @@ class RoastHistoryViewModel: ObservableObject {
         print("  roast.isFavorite BEFORE: \(roast.isFavorite)")
 
         storageService.toggleFavorite(roastId: roast.id)
+        // Note: Local update will be handled by handleFavoriteChange via notification
+    }
 
-        // Update local array immediately for better UX
-        if let index = roasts.firstIndex(where: { $0.id == roast.id }) {
-            roasts[index].isFavorite.toggle()
-            print("  roasts[\(index)].isFavorite AFTER: \(roasts[index].isFavorite)")
+    private func handleFavoriteChange(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let roastId = userInfo["roastId"] as? UUID,
+              let isFavorite = userInfo["isFavorite"] as? Bool else { return }
+
+        print("🔄 RoastHistoryViewModel.handleFavoriteChange:")
+        print("  roastId: \(roastId)")
+        print("  isFavorite: \(isFavorite)")
+
+        // Update local array
+        if let index = roasts.firstIndex(where: { $0.id == roastId }) {
+            roasts[index].isFavorite = isFavorite
+            print("  roasts[\(index)].isFavorite UPDATED: \(roasts[index].isFavorite)")
             roastsSubject.onNext(roasts)
         }
     }

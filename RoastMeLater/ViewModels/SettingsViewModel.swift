@@ -148,6 +148,9 @@ class SettingsViewModel: ObservableObject {
         updatePreferences { preferences in
             preferences.defaultSpiceLevel = level
         }
+
+        // Notify other ViewModels about settings change
+        NotificationCenter.default.post(name: .settingsDidChange, object: nil)
     }
     
     func updateSafetyFilters(_ enabled: Bool) {
