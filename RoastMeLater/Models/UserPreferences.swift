@@ -17,7 +17,7 @@ struct UserPreferences: Codable {
         self.notificationsEnabled = true
         self.notificationFrequency = .hourly
         self.preferredCategories = RoastCategory.allCases
-        self.safetyFiltersEnabled = true
+        self.safetyFiltersEnabled = false  // Allow full spice level range
         self.defaultCategory = .general
         self.defaultSpiceLevel = 3
         self.apiConfiguration = APIConfiguration()

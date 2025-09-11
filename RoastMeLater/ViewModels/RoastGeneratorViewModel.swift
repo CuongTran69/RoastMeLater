@@ -163,7 +163,7 @@ class RoastGeneratorViewModel: ObservableObject {
     }
 
     // MARK: - Public Methods
-    func generateRoast(category: RoastCategory, spiceLevel: Int, language: String = "vi") {
+    func generateRoast(category: RoastCategory, spiceLevel: Int, language: String? = nil) {
         let preferences = storageService.getUserPreferences()
 
         // Check if API is configured
@@ -175,19 +175,23 @@ class RoastGeneratorViewModel: ObservableObject {
 
         loadingSubject.onNext(true)
 
+        // Use provided language or fall back to user preferences
+        let finalLanguage = language ?? preferences.preferredLanguage
+
         print("🎯 Generate Roast - API Config:")
         print("  apiKey: \(preferences.apiConfiguration.apiKey.isEmpty ? "EMPTY" : "HAS_VALUE")")
         print("  baseURL: \(preferences.apiConfiguration.baseURL)")
         print("  category: \(category.displayName)")
         print("  spiceLevel: \(spiceLevel)")
+        print("  language: \(finalLanguage)")
 
         let finalSpiceLevel = preferences.safetyFiltersEnabled ?
-            min(spiceLevel, 4) : spiceLevel
+            min(spiceLevel, 5) : spiceLevel  // Allow up to level 5 even with safety filter
 
         aiService.generateRoast(
             category: category,
             spiceLevel: finalSpiceLevel,
-            language: language
+            language: finalLanguage
         )
         .observe(on: MainScheduler.instance)
         .subscribe(
@@ -288,15 +292,18 @@ class RoastGeneratorViewModel: ObservableObject {
     }
     
     // MARK: - Reactive Methods
-    func generateRoastReactive(category: RoastCategory, spiceLevel: Int, language: String = "vi") -> Observable<Roast> {
+    func generateRoastReactive(category: RoastCategory, spiceLevel: Int, language: String? = nil) -> Observable<Roast> {
         let preferences = storageService.getUserPreferences()
-        let finalSpiceLevel = preferences.safetyFiltersEnabled ? 
-            min(spiceLevel, 4) : spiceLevel
-        
+        let finalSpiceLevel = preferences.safetyFiltersEnabled ?
+            min(spiceLevel, 5) : spiceLevel  // Allow up to level 5 even with safety filter
+
+        // Use provided language or fall back to user preferences
+        let finalLanguage = language ?? preferences.preferredLanguage
+
         return aiService.generateRoast(
             category: category,
             spiceLevel: finalSpiceLevel,
-            language: language
+            language: finalLanguage
         )
         .map { [weak self] roast -> Roast in
             guard let self = self else { return roast }

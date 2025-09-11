@@ -213,15 +213,9 @@ struct RoastGeneratorView: View {
     }
     
     private func generateRoast() {
-        // Clear current roast first to ensure only new roast is shown
-        withAnimation(.easeOut(duration: 0.2)) {
-            viewModel.clearCurrentRoast()
-        }
-
-        // Generate new roast after a brief delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            viewModel.generateRoast(category: viewModel.selectedCategory, spiceLevel: viewModel.spiceLevel)
-        }
+        // Directly generate new roast without clearing current one
+        // This keeps the current roast visible until new one is ready
+        viewModel.generateRoast(category: viewModel.selectedCategory, spiceLevel: viewModel.spiceLevel)
     }
 
     private func getSpiceLevelDescription(_ level: Int) -> String {

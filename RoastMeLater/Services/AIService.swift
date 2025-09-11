@@ -49,12 +49,15 @@ class AIService: AIServiceProtocol {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.timeoutInterval = Constants.API.requestTimeout
 
+            // Create dynamic system prompt based on language
+            let systemPrompt = self.createSystemPrompt(language: language)
+
             let requestBody: [String: Any] = [
                 "model": apiConfig.modelName,
                 "messages": [
                     [
                         "role": "system",
-                        "content": "You are a witty office humor assistant that creates workplace-appropriate roasts in Vietnamese. Keep content light-hearted and suitable for office environments."
+                        "content": systemPrompt
                     ],
                     [
                         "role": "user",
@@ -103,9 +106,12 @@ class AIService: AIServiceProtocol {
                 do {
                     let response = try JSONDecoder().decode(OpenAIResponse.self, from: data)
                     if let content = response.choices.first?.message.content {
-                        print("✅ API Success: \(content)")
+                        // Clean and process the content to ensure only one roast
+                        let cleanedContent = self.cleanRoastContent(content)
+                        print("✅ API Success: \(cleanedContent)")
+
                         let roast = Roast(
-                            content: content.trimmingCharacters(in: .whitespacesAndNewlines),
+                            content: cleanedContent,
                             category: category,
                             spiceLevel: spiceLevel,
                             language: language
@@ -156,7 +162,62 @@ class AIService: AIServiceProtocol {
             return Disposables.create()
         }
     }
-    
+
+    private func cleanRoastContent(_ content: String) -> String {
+        // Remove extra whitespace and newlines
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Split by common separators and take only the first meaningful sentence
+        let separators = ["\n\n", "\n", ". ", "! ", "? "]
+        var cleanedContent = trimmed
+
+        for separator in separators {
+            if let firstPart = trimmed.components(separatedBy: separator).first,
+               !firstPart.isEmpty && firstPart.count > 10 { // Ensure it's a meaningful sentence
+                cleanedContent = firstPart
+                break
+            }
+        }
+
+        // Remove any quotes or extra formatting
+        cleanedContent = cleanedContent.replacingOccurrences(of: "\"", with: "")
+        cleanedContent = cleanedContent.replacingOccurrences(of: "\u{201C}", with: "") // Left double quotation mark
+        cleanedContent = cleanedContent.replacingOccurrences(of: "\u{201D}", with: "") // Right double quotation mark
+        cleanedContent = cleanedContent.replacingOccurrences(of: "\u{2018}", with: "'") // Left single quotation mark
+        cleanedContent = cleanedContent.replacingOccurrences(of: "\u{2019}", with: "'") // Right single quotation mark
+
+        // Ensure it ends with proper punctuation
+        let lastChar = cleanedContent.last
+        if lastChar != "!" && lastChar != "?" && lastChar != "." {
+            cleanedContent += "!"
+        }
+
+        return cleanedContent.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func createSystemPrompt(language: String) -> String {
+        switch language.lowercased() {
+        case "vi", "vietnamese":
+            return """
+            Bạn là một trợ lý hài hước văn phòng chuyên tạo ra những câu roast phù hợp với môi trường làm việc bằng tiếng Việt.
+            Hãy giữ nội dung nhẹ nhàng, hài hước và phù hợp với văn hóa công sở Việt Nam.
+            Chỉ trả về MỘT câu roast duy nhất, không giải thích thêm.
+            """
+        case "en", "english":
+            return """
+            You are a witty office humor assistant that creates workplace-appropriate roasts in English.
+            Keep content light-hearted, professional, and suitable for office environments.
+            Return ONLY ONE roast, no explanations.
+            """
+        default:
+            return """
+            Bạn là một trợ lý hài hước văn phòng chuyên tạo ra những câu roast phù hợp với môi trường làm việc bằng tiếng Việt.
+            Hãy giữ nội dung nhẹ nhàng, hài hước và phù hợp với văn hóa công sở Việt Nam.
+            Chỉ trả về MỘT câu roast duy nhất, không giải thích thêm.
+            """
+        }
+    }
+
     private func createPrompt(category: RoastCategory, spiceLevel: Int, language: String) -> String {
         let categoryContext = getCategoryContext(category)
         let spiceLevelGuidance = getSpiceLevelGuidance(spiceLevel)
@@ -167,7 +228,7 @@ class AIService: AIServiceProtocol {
 
         Chủ đề: \(categoryContext.topic)
         Bối cảnh: \(categoryContext.context)
-        Mức độ: \(spiceLevelGuidance.description) (\(spiceLevel)/5)
+        Mức độ cay: \(spiceLevelGuidance.description) (Level \(spiceLevel)/5)
 
         Hướng dẫn tạo roast:
         \(spiceLevelGuidance.guidelines)
@@ -176,21 +237,21 @@ class AIService: AIServiceProtocol {
         - Độ dài: 15-40 từ (1-2 câu ngắn gọn)
         - Phong cách: \(spiceLevelGuidance.style)
         - Tông điệu: \(spiceLevelGuidance.tone)
-        - Sử dụng: \(categoryContext.examples.randomElement() ?? "ví dụ thực tế")
+        - Sử dụng ví dụ: \(categoryContext.examples.randomElement() ?? "ví dụ thực tế")
         - Tránh: từ ngữ thô tục, xúc phạm cá nhân, nội dung nhạy cảm
 
-        Chỉ trả về nội dung roast hoàn chỉnh, không giải thích.
+        Trả về MỘT câu roast hoàn chỉnh duy nhất, không giải thích gì thêm.
         """
     }
     
     private func getLanguageInstruction(_ language: String) -> String {
         switch language.lowercased() {
         case "vi", "vietnamese":
-            return "Tạo một câu roast bằng tiếng Việt tự nhiên, sử dụng từ ngữ phù hợp với văn hóa Việt Nam và môi trường công sở."
+            return "QUAN TRỌNG: Trả lời HOÀN TOÀN bằng tiếng Việt. Tạo một câu roast bằng tiếng Việt tự nhiên, sử dụng từ ngữ phù hợp với văn hóa Việt Nam và môi trường công sở."
         case "en", "english":
-            return "Create a witty roast in English suitable for office environment and professional context."
+            return "IMPORTANT: Respond ENTIRELY in English. Create a witty roast in English suitable for office environment and professional context."
         default:
-            return "Tạo một câu roast bằng tiếng Việt tự nhiên, sử dụng từ ngữ phù hợp với văn hóa Việt Nam và môi trường công sở."
+            return "QUAN TRỌNG: Trả lời HOÀN TOÀN bằng tiếng Việt. Tạo một câu roast bằng tiếng Việt tự nhiên, sử dụng từ ngữ phù hợp với văn hóa Việt Nam và môi trường công sở."
         }
     }
 
