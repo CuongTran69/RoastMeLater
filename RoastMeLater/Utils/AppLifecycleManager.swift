@@ -127,7 +127,7 @@ class AppLifecycleManager: ObservableObject {
         // Save any important app state data
         let appStateData = AppStateData(
             lastActiveDate: Date(),
-            appVersion: "1.0.0",
+            appVersion: Constants.App.version,
             sessionCount: getSessionCount() + 1
         )
         

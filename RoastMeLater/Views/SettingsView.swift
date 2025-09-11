@@ -77,43 +77,7 @@ struct SettingsView: View {
                         viewModel.updatePreferredLanguage(newValue)
                     }
                 }
-                
-                // Category Preferences
-                Section("Danh Mục Ưa Thích") {
-                    ForEach(RoastCategory.allCases, id: \.self) { category in
-                        HStack {
-                            Image(systemName: category.icon)
-                                .foregroundColor(.orange)
-                                .frame(width: 20)
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(category.displayName)
-                                    .font(.body)
-                                
-                                Text(category.description)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
-                            }
-                            
-                            Spacer()
-                            
-                            Toggle("", isOn: Binding(
-                                get: { viewModel.preferredCategories.contains(category) },
-                                set: { isSelected in
-                                    if isSelected {
-                                        viewModel.addPreferredCategory(category)
-                                    } else {
-                                        viewModel.removePreferredCategory(category)
-                                    }
-                                }
-                            ))
-                            .labelsHidden()
-                        }
-                        .padding(.vertical, 2)
-                    }
-                }
-                
+
                 // API Configuration
                 Section(header:
                     HStack {
@@ -215,6 +179,18 @@ struct SettingsView: View {
 
                 // Data Management
                 Section("Dữ Liệu") {
+                    Button("Xuất cài đặt") {
+                        viewModel.exportSettings()
+                    }
+                    .foregroundColor(.blue)
+
+                    Button("Nhập cài đặt") {
+                        viewModel.importSettings()
+                    }
+                    .foregroundColor(.blue)
+
+                    Divider()
+
                     Button("Xóa lịch sử roast") {
                         viewModel.clearRoastHistory()
                     }
@@ -231,23 +207,26 @@ struct SettingsView: View {
                     .foregroundColor(.red)
                 }
                 
-                // App Info
-                Section("Thông Tin Ứng Dụng") {
+                // Version Info
+                Section("Phiên Bản") {
                     HStack {
                         Text("Phiên bản")
                         Spacer()
-                        Text("1.0.0")
+                        Text(Constants.App.version)
                             .foregroundColor(.secondary)
                     }
-                    
+                }
+
+                // App Info
+                Section("Thông Tin Ứng Dụng") {
                     Button("Giới thiệu") {
                         showingAbout = true
                     }
                     .foregroundColor(.orange)
-                    
+
                     Link("Đánh giá ứng dụng", destination: URL(string: "https://apps.apple.com")!)
                         .foregroundColor(.orange)
-                    
+
                     Link("Liên hệ hỗ trợ", destination: URL(string: "mailto:support@roastme.app")!)
                         .foregroundColor(.orange)
                 }
@@ -422,7 +401,7 @@ struct AboutView: View {
 
                         VStack(spacing: 4) {
                             HStack {
-                                Text("Phiên bản 1.0.0")
+                                Text("Phiên bản \(Constants.App.version)")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
 
@@ -434,13 +413,13 @@ struct AboutView: View {
                             }
 
                             HStack {
-                                Text("Yêu cầu iOS 16.5+")
+                                Text("Yêu cầu iOS \(Constants.App.minimumIOSVersion)+")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
 
                                 Spacer()
 
-                                Text("Tối ưu cho iOS 17.0")
+                                Text("Tối ưu cho iOS \(Constants.App.targetIOSVersion)")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }

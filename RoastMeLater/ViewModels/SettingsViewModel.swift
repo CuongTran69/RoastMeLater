@@ -1,8 +1,10 @@
 import Foundation
 import RxSwift
 import RxCocoa
+import UIKit
+import UniformTypeIdentifiers
 
-class SettingsViewModel: ObservableObject {
+class SettingsViewModel: ObservableObject, UIDocumentPickerDelegate {
     // MARK: - Published Properties
     @Published var notificationsEnabled = true
     @Published var notificationFrequency: NotificationFrequency = .hourly
@@ -217,6 +219,65 @@ class SettingsViewModel: ObservableObject {
         let defaultPreferences = UserPreferences()
         preferencesSubject.onNext(defaultPreferences)
         storageService.saveUserPreferences(defaultPreferences)
+    }
+
+    func exportSettings() {
+        do {
+            let preferences = try preferencesSubject.value()
+            let data = try JSONEncoder().encode(preferences)
+
+            // Create a temporary file
+            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let fileName = "RoastMe_Settings_\(Date().timeIntervalSince1970).json"
+            let fileURL = documentsPath.appendingPathComponent(fileName)
+
+            try data.write(to: fileURL)
+
+            // Share the file
+            DispatchQueue.main.async {
+                let activityVC = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let window = windowScene.windows.first {
+                    window.rootViewController?.present(activityVC, animated: true)
+                }
+            }
+        } catch {
+            print("Export failed: \(error)")
+        }
+    }
+
+    func importSettings() {
+        let documentPicker = UIDocumentPickerViewController(forOpeningContentTypes: [.json])
+        documentPicker.delegate = self
+
+        DispatchQueue.main.async {
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = windowScene.windows.first {
+                window.rootViewController?.present(documentPicker, animated: true)
+            }
+        }
+    }
+
+    // MARK: - UIDocumentPickerDelegate
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let url = urls.first else { return }
+
+        do {
+            let data = try Data(contentsOf: url)
+            let preferences = try JSONDecoder().decode(UserPreferences.self, from: data)
+
+            // Update all settings
+            preferencesSubject.onNext(preferences)
+            storageService.saveUserPreferences(preferences)
+
+            // Reload UI
+            loadSettings()
+
+            print("Settings imported successfully")
+        } catch {
+            print("Import failed: \(error)")
+        }
     }
 
     // MARK: - API Configuration Methods

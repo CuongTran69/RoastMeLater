@@ -18,29 +18,29 @@ struct ContentView: View {
                     Text("Roast")
                 }
                 .tag(0)
-            
+
             RoastHistoryView(onNavigateToRoastGenerator: {
                 selectedTab = 0
             })
                 .tabItem {
                     Image(systemName: "clock.fill")
-                    Text("History")
+                    Text("Lịch sử")
                 }
                 .tag(1)
-            
+
             FavoritesView(onNavigateToRoastGenerator: {
                 selectedTab = 0
             })
                 .tabItem {
                     Image(systemName: "heart.fill")
-                    Text("Favorites")
+                    Text("Yêu thích")
                 }
                 .tag(2)
-            
+
             SettingsView()
                 .tabItem {
                     Image(systemName: "gear")
-                    Text("Settings")
+                    Text("Cài đặt")
                 }
                 .tag(3)
         }

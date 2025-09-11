@@ -213,6 +213,10 @@ struct RoastGeneratorView: View {
     }
     
     private func generateRoast() {
+        // Haptic feedback for generate action
+        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        impactFeedback.impactOccurred()
+
         // Directly generate new roast without clearing current one
         // This keeps the current roast visible until new one is ready
         viewModel.generateRoast(category: viewModel.selectedCategory, spiceLevel: viewModel.spiceLevel)
