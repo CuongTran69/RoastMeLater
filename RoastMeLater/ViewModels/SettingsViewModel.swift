@@ -18,6 +18,21 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     @Published var baseURL = ""
     @Published var apiTestResult: Bool?
 
+    // Export/Import State
+    @Published var isExporting = false
+    @Published var isImporting = false
+    @Published var exportProgress: ExportProgress?
+    @Published var importProgress: ImportProgress?
+    @Published var importPreview: ImportPreview?
+    @Published var showingImportPreview = false
+    @Published var showingExportOptions = false
+    @Published var showingPrivacyNotice = false
+    @Published var exportOptions = ExportOptions.default
+    @Published var importOptions = ImportOptions.merge
+    @Published var privacyNotice: PrivacyNotice?
+    @Published var complianceIssues: [ComplianceIssue] = []
+    @Published var currentExportOptions: ExportOptions?
+
     // Model cố định - không cần @Published
     var modelName: String {
         return Constants.API.fixedModel
@@ -31,6 +46,8 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     // MARK: - Private Properties
     private let storageService: StorageServiceProtocol
     private let aiService: AIServiceProtocol
+    private let dataExportService: DataExportServiceProtocol
+    private let dataImportService: DataImportServiceProtocol
     private let disposeBag = DisposeBag()
     
     // MARK: - Reactive Properties
@@ -47,9 +64,13 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     
     // MARK: - Initialization
     init(storageService: StorageServiceProtocol = StorageService(),
-         aiService: AIServiceProtocol = AIService()) {
+         aiService: AIServiceProtocol = AIService(),
+         dataExportService: DataExportServiceProtocol? = nil,
+         dataImportService: DataImportServiceProtocol? = nil) {
         self.storageService = storageService
         self.aiService = aiService
+        self.dataExportService = dataExportService ?? DataExportService(storageService: storageService)
+        self.dataImportService = dataImportService ?? DataImportService(storageService: storageService)
         super.init()
         setupBindings()
         loadSettings()
@@ -228,33 +249,81 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
         storageService.saveUserPreferences(defaultPreferences)
     }
 
+    // MARK: - Enhanced Export/Import Methods
+
+    func showExportOptions() {
+        showingExportOptions = true
+    }
+
+    // Convenience method for backward compatibility
     func exportSettings() {
+        exportData(with: .default)
+    }
+
+    // Convenience method for backward compatibility
+    func importSettings() {
+        importData()
+    }
+
+    func exportData(with options: ExportOptions = .default) {
+        isExporting = true
+        exportProgress = nil
+
+        dataExportService.exportData(options: options)
+            .observe(on: MainScheduler.instance)
+            .subscribe(
+                onNext: { [weak self] progress in
+                    self?.exportProgress = progress
+
+                    if case .completed = progress.phase {
+                        self?.isExporting = false
+                        // Show share sheet for the exported file
+                        self?.shareExportedFile()
+                    }
+                },
+                onError: { [weak self] error in
+                    self?.isExporting = false
+                    self?.exportProgress = ExportProgress(
+                        phase: .failed(error),
+                        progress: 0.0,
+                        message: error.localizedDescription,
+                        itemsProcessed: 0,
+                        totalItems: 0
+                    )
+                    print("Export failed: \(error)")
+                }
+            )
+            .disposed(by: disposeBag)
+    }
+
+    private func shareExportedFile() {
+        // Get the most recent export file
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+
         do {
-            let preferences = try preferencesSubject.value()
-            let data = try JSONEncoder().encode(preferences)
+            let files = try FileManager.default.contentsOfDirectory(at: documentsPath, includingPropertiesForKeys: [.creationDateKey])
+            let exportFiles = files.filter { $0.lastPathComponent.hasPrefix("RoastMeLater_Export_") }
 
-            // Create a temporary file
-            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            let fileName = "RoastMe_Settings_\(Date().timeIntervalSince1970).json"
-            let fileURL = documentsPath.appendingPathComponent(fileName)
+            if let latestFile = exportFiles.max(by: { file1, file2 in
+                let date1 = (try? file1.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? Date.distantPast
+                let date2 = (try? file2.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? Date.distantPast
+                return date1 < date2
+            }) {
+                DispatchQueue.main.async {
+                    let activityVC = UIActivityViewController(activityItems: [latestFile], applicationActivities: nil)
 
-            try data.write(to: fileURL)
-
-            // Share the file
-            DispatchQueue.main.async {
-                let activityVC = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
-
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let window = windowScene.windows.first {
-                    window.rootViewController?.present(activityVC, animated: true)
+                    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                       let window = windowScene.windows.first {
+                        window.rootViewController?.present(activityVC, animated: true)
+                    }
                 }
             }
         } catch {
-            print("Export failed: \(error)")
+            print("Failed to find export file: \(error)")
         }
     }
 
-    func importSettings() {
+    func importData() {
         let documentPicker = UIDocumentPickerViewController(forOpeningContentTypes: [.json])
         documentPicker.delegate = self
 
@@ -266,25 +335,94 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
         }
     }
 
+    func previewImportData(from url: URL) {
+        do {
+            let data = try Data(contentsOf: url)
+            pendingImportData = data // Cache the data for later import
+
+            dataImportService.previewImport(from: data)
+                .observe(on: MainScheduler.instance)
+                .subscribe(
+                    onNext: { [weak self] preview in
+                        self?.importPreview = preview
+                        self?.showingImportPreview = true
+                    },
+                    onError: { [weak self] error in
+                        self?.pendingImportData = nil // Clear on error
+                        print("Preview failed: \(error)")
+                    }
+                )
+                .disposed(by: disposeBag)
+        } catch {
+            print("Failed to read file: \(error)")
+        }
+    }
+
+    // Store the import data temporarily
+    private var pendingImportData: Data?
+
+    func confirmImport(with options: ImportOptions = .merge) {
+        guard let importData = pendingImportData else {
+            print("No import data available")
+            return
+        }
+
+        isImporting = true
+        importProgress = nil
+        showingImportPreview = false
+
+        dataImportService.importData(from: importData, options: options)
+            .observe(on: MainScheduler.instance)
+            .subscribe(
+                onNext: { [weak self] progress in
+                    self?.importProgress = progress
+
+                    if case .completed = progress.phase {
+                        self?.isImporting = false
+                        self?.pendingImportData = nil // Clear cached data
+                        self?.loadSettings() // Refresh UI
+                        self?.loadStatistics() // Refresh statistics
+                    }
+                },
+                onError: { [weak self] error in
+                    self?.isImporting = false
+                    self?.pendingImportData = nil // Clear cached data
+                    self?.importProgress = ImportProgress(
+                        phase: .failed(error),
+                        progress: 0.0,
+                        message: error.localizedDescription,
+                        itemsProcessed: 0,
+                        totalItems: 0,
+                        warnings: []
+                    )
+                    print("Import failed: \(error)")
+                }
+            )
+            .disposed(by: disposeBag)
+    }
+
+    func cancelImport() {
+        showingImportPreview = false
+        importPreview = nil
+        pendingImportData = nil // Clear cached data
+    }
+
     // MARK: - UIDocumentPickerDelegate
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard let url = urls.first else { return }
 
-        do {
-            let data = try Data(contentsOf: url)
-            let preferences = try JSONDecoder().decode(UserPreferences.self, from: data)
-
-            // Update all settings
-            preferencesSubject.onNext(preferences)
-            storageService.saveUserPreferences(preferences)
-
-            // Reload UI
-            loadSettings()
-
-            print("Settings imported successfully")
-        } catch {
-            print("Import failed: \(error)")
+        // Start security-scoped resource access
+        guard url.startAccessingSecurityScopedResource() else {
+            print("Failed to access security-scoped resource")
+            return
         }
+
+        defer {
+            url.stopAccessingSecurityScopedResource()
+        }
+
+        // Preview the import data first
+        previewImportData(from: url)
     }
 
     // MARK: - API Configuration Methods
@@ -411,6 +549,42 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     func getContentSettingsObservable() -> Observable<(Int, Bool, String)> {
         return preferences
             .map { ($0.defaultSpiceLevel, $0.safetyFiltersEnabled, $0.preferredLanguage) }
+    }
+
+    // MARK: - Privacy and Security Methods
+
+    func generatePrivacyNotice(for options: ExportOptions) {
+        currentExportOptions = options
+
+        dataExportService.generatePrivacyNotice(for: options)
+            .observe(on: MainScheduler.instance)
+            .subscribe(onNext: { [weak self] notice, issues in
+                self?.privacyNotice = notice
+                self?.complianceIssues = issues
+                self?.showingPrivacyNotice = true
+            }, onError: { [weak self] error in
+                self?.handleError(error)
+            })
+            .disposed(by: disposeBag)
+    }
+
+    func acceptPrivacyNoticeAndExport() {
+        guard let options = currentExportOptions else { return }
+        showingPrivacyNotice = false
+        performExport(with: options)
+    }
+
+    func cancelPrivacyNotice() {
+        showingPrivacyNotice = false
+        currentExportOptions = nil
+        privacyNotice = nil
+        complianceIssues = []
+    }
+
+    private func handleError(_ error: Error) {
+        // Handle errors appropriately
+        print("Error: \(error.localizedDescription)")
+        // You could show an alert or update UI state here
     }
 }
 

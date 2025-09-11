@@ -180,20 +180,26 @@ struct SettingsView: View {
                     .padding(.vertical, 8)
                 }
 
-                // Data Management
-                Section(localizationManager.data) {
-                    Button(localizationManager.exportSettings) {
-                        viewModel.exportSettings()
+                // Data Management - Enhanced Section
+                Section {
+                    NavigationLink(destination: DataManagementView(viewModel: viewModel)) {
+                        HStack {
+                            Image(systemName: "externaldrive")
+                                .foregroundColor(.blue)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(localizationManager.currentLanguage == "en" ? "Data Management" : "Quản Lý Dữ Liệu")
+                                    .fontWeight(.medium)
+                                Text(localizationManager.currentLanguage == "en" ? "Export, import, and manage your data" : "Xuất, nhập và quản lý dữ liệu của bạn")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
                     }
-                    .foregroundColor(.blue)
-
-                    Button(localizationManager.importSettings) {
-                        viewModel.importSettings()
-                    }
-                    .foregroundColor(.blue)
 
                     Divider()
 
+                    // Quick Actions
                     Button(localizationManager.clearHistory) {
                         viewModel.clearRoastHistory()
                     }
@@ -208,6 +214,8 @@ struct SettingsView: View {
                         viewModel.resetAllSettings()
                     }
                     .foregroundColor(.red)
+                } header: {
+                    Text(localizationManager.data)
                 }
                 
                 // Version Info
