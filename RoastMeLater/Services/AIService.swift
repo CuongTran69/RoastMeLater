@@ -2,7 +2,7 @@ import Foundation
 import RxSwift
 
 protocol AIServiceProtocol {
-    func generateRoast(category: RoastCategory, spiceLevel: Int, language: String) -> Observable<Roast>
+    func generateRoast(category: RoastCategory, spiceLevel: Int, language: String?) -> Observable<Roast>
     func testAPIConnection(apiKey: String, baseURL: String, modelName: String) -> Observable<Bool>
 }
 
@@ -18,7 +18,8 @@ class AIService: AIServiceProtocol {
         return storageService.getUserPreferences().apiConfiguration
     }
     
-    func generateRoast(category: RoastCategory, spiceLevel: Int, language: String) -> Observable<Roast> {
+    func generateRoast(category: RoastCategory, spiceLevel: Int, language: String? = nil) -> Observable<Roast> {
+        let currentLanguage = language ?? LocalizationManager.shared.currentLanguage
         let apiConfig = getAPIConfiguration()
 
         // Debug logging
@@ -30,13 +31,13 @@ class AIService: AIServiceProtocol {
         // Use mock data if no API configuration is provided
         if apiConfig.apiKey.isEmpty || apiConfig.baseURL.isEmpty {
             print("❌ Using mock data - API config not valid")
-            return generateMockRoast(category: category, spiceLevel: spiceLevel, language: language)
+            return generateMockRoast(category: category, spiceLevel: spiceLevel, language: currentLanguage)
         }
 
         print("✅ Using real API call")
 
         return Observable.create { observer in
-            let prompt = self.createPrompt(category: category, spiceLevel: spiceLevel, language: language)
+            let prompt = self.createPrompt(category: category, spiceLevel: spiceLevel, language: currentLanguage)
 
             guard let url = URL(string: apiConfig.baseURL) else {
                 observer.onError(AIServiceError.invalidResponse)
@@ -50,7 +51,7 @@ class AIService: AIServiceProtocol {
             request.timeoutInterval = Constants.API.requestTimeout
 
             // Create dynamic system prompt based on language
-            let systemPrompt = self.createSystemPrompt(language: language)
+            let systemPrompt = self.createSystemPrompt(language: currentLanguage)
 
             let requestBody: [String: Any] = [
                 "model": apiConfig.modelName,
@@ -114,7 +115,7 @@ class AIService: AIServiceProtocol {
                             content: cleanedContent,
                             category: category,
                             spiceLevel: spiceLevel,
-                            language: language
+                            language: language ?? "vi"
                         )
                         observer.onNext(roast)
                         observer.onCompleted()

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RoastHistoryView: View {
     @StateObject private var viewModel = RoastHistoryViewModel()
+    @EnvironmentObject var localizationManager: LocalizationManager
     @State private var searchText = ""
     @State private var selectedCategory: RoastCategory? = nil
     @State private var showingFilterSheet = false
@@ -24,10 +25,10 @@ struct RoastHistoryView: View {
                         .onDelete(perform: deleteRoasts)
                     }
                     .listStyle(PlainListStyle())
-                    .searchable(text: $searchText, prompt: "Tìm kiếm roast...")
+                    .searchable(text: $searchText, prompt: localizationManager.searchRoasts)
                 }
             }
-            .navigationTitle("Lịch Sử")
+            .navigationTitle(localizationManager.tabHistory)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {

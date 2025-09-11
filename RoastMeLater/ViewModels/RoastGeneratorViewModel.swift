@@ -175,15 +175,12 @@ class RoastGeneratorViewModel: ObservableObject {
 
         loadingSubject.onNext(true)
 
-        // Use provided language or fall back to user preferences
-        let finalLanguage = language ?? preferences.preferredLanguage
-
         print("🎯 Generate Roast - API Config:")
         print("  apiKey: \(preferences.apiConfiguration.apiKey.isEmpty ? "EMPTY" : "HAS_VALUE")")
         print("  baseURL: \(preferences.apiConfiguration.baseURL)")
         print("  category: \(category.displayName)")
         print("  spiceLevel: \(spiceLevel)")
-        print("  language: \(finalLanguage)")
+        print("  language: Auto-detect from LocalizationManager")
 
         let finalSpiceLevel = preferences.safetyFiltersEnabled ?
             min(spiceLevel, 5) : spiceLevel  // Allow up to level 5 even with safety filter
@@ -191,7 +188,7 @@ class RoastGeneratorViewModel: ObservableObject {
         aiService.generateRoast(
             category: category,
             spiceLevel: finalSpiceLevel,
-            language: finalLanguage
+            language: nil  // Use LocalizationManager.shared.currentLanguage
         )
         .observe(on: MainScheduler.instance)
         .subscribe(
@@ -297,13 +294,10 @@ class RoastGeneratorViewModel: ObservableObject {
         let finalSpiceLevel = preferences.safetyFiltersEnabled ?
             min(spiceLevel, 5) : spiceLevel  // Allow up to level 5 even with safety filter
 
-        // Use provided language or fall back to user preferences
-        let finalLanguage = language ?? preferences.preferredLanguage
-
         return aiService.generateRoast(
             category: category,
             spiceLevel: finalSpiceLevel,
-            language: finalLanguage
+            language: nil  // Use LocalizationManager.shared.currentLanguage
         )
         .map { [weak self] roast -> Roast in
             guard let self = self else { return roast }

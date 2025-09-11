@@ -78,7 +78,7 @@ class NotificationManager: ObservableObject {
     func generateAndScheduleRoastNotification() {
         let preferences = storageService.getUserPreferences()
         let randomCategory = preferences.preferredCategories.randomElement() ?? .general
-        
+
         aiService.generateRoast(
             category: randomCategory,
             spiceLevel: preferences.defaultSpiceLevel,
@@ -90,6 +90,30 @@ class NotificationManager: ObservableObject {
             print("Error generating roast for notification: \(error)")
         })
         .disposed(by: disposeBag)
+    }
+
+    func scheduleTestNotification() {
+        guard notificationPermissionGranted else {
+            requestNotificationPermission()
+            return
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = "🔥 Test Notification"
+        content.body = "Đây là thông báo test! Tính năng thông báo đang hoạt động tốt."
+        content.sound = .default
+        content.badge = 1
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
+        let request = UNNotificationRequest(identifier: "test_notification", content: content, trigger: trigger)
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Error scheduling test notification: \(error.localizedDescription)")
+            } else {
+                print("Test notification scheduled successfully")
+            }
+        }
     }
     
     private func scheduleImmediateNotification(with roast: Roast) {

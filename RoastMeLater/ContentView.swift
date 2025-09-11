@@ -9,7 +9,8 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var selectedTab = 0
-    
+    @StateObject private var localizationManager = LocalizationManager.shared
+
     var body: some View {
         TabView(selection: $selectedTab) {
             RoastGeneratorView()
@@ -24,7 +25,7 @@ struct ContentView: View {
             })
                 .tabItem {
                     Image(systemName: "clock.fill")
-                    Text("Lịch sử")
+                    Text(localizationManager.tabHistory)
                 }
                 .tag(1)
 
@@ -33,17 +34,18 @@ struct ContentView: View {
             })
                 .tabItem {
                     Image(systemName: "heart.fill")
-                    Text("Yêu thích")
+                    Text(localizationManager.tabFavorites)
                 }
                 .tag(2)
 
             SettingsView()
                 .tabItem {
                     Image(systemName: "gear")
-                    Text("Cài đặt")
+                    Text(localizationManager.tabSettings)
                 }
                 .tag(3)
         }
+        .environmentObject(localizationManager)
         .accentColor(.orange)
     }
 }

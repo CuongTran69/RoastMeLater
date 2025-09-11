@@ -4,7 +4,7 @@ import RxCocoa
 import UIKit
 import UniformTypeIdentifiers
 
-class SettingsViewModel: ObservableObject, UIDocumentPickerDelegate {
+class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     // MARK: - Published Properties
     @Published var notificationsEnabled = true
     @Published var notificationFrequency: NotificationFrequency = .hourly
@@ -50,6 +50,7 @@ class SettingsViewModel: ObservableObject, UIDocumentPickerDelegate {
          aiService: AIServiceProtocol = AIService()) {
         self.storageService = storageService
         self.aiService = aiService
+        super.init()
         setupBindings()
         loadSettings()
 
@@ -106,7 +107,10 @@ class SettingsViewModel: ObservableObject, UIDocumentPickerDelegate {
     func loadSettings() {
         let preferences = storageService.getUserPreferences()
         preferencesSubject.onNext(preferences)
-        
+
+        // Sync language with LocalizationManager
+        LocalizationManager.shared.setLanguage(preferences.preferredLanguage)
+
         // Load statistics
         loadStatistics()
     }
@@ -167,6 +171,9 @@ class SettingsViewModel: ObservableObject, UIDocumentPickerDelegate {
         updatePreferences { preferences in
             preferences.preferredLanguage = language
         }
+
+        // Sync with LocalizationManager
+        LocalizationManager.shared.setLanguage(language)
     }
     
     func addPreferredCategory(_ category: RoastCategory) {

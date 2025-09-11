@@ -15,17 +15,8 @@ struct RoastMeApp: App {
     @State private var showSplash = true
 
     init() {
-        // Setup notification categories
-        NotificationScheduler.shared.setupNotificationCategories()
-
-        // Request notification permissions on app launch
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            if granted {
-                print("Notification permission granted")
-            } else if let error = error {
-                print("Notification permission error: \(error.localizedDescription)")
-            }
-        }
+        // Setup notification delegate
+        UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
     }
 
     var body: some Scene {
@@ -45,8 +36,8 @@ struct RoastMeApp: App {
                     .environmentObject(notificationManager)
                     .environmentObject(lifecycleManager)
                     .onAppear {
-                        // Schedule initial notifications
-                        notificationManager.scheduleHourlyNotifications()
+                        // Check and request notification permission if needed
+                        notificationManager.requestNotificationPermission()
                     }
                     .onReceive(NotificationCenter.default.publisher(for: .navigateToRoastGenerator)) { _ in
                         // Handle navigation from notification tap

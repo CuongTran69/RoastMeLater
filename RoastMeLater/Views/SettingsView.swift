@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
     @EnvironmentObject var notificationManager: NotificationManager
+    @EnvironmentObject var localizationManager: LocalizationManager
     @State private var showingAbout = false
     @State private var showingNotificationTest = false
     
@@ -10,8 +11,8 @@ struct SettingsView: View {
         NavigationView {
             Form {
                 // Notification Settings
-                Section("Thông Báo") {
-                    Toggle("Bật thông báo", isOn: $viewModel.notificationsEnabled)
+                Section(localizationManager.notifications) {
+                    Toggle(localizationManager.currentLanguage == "en" ? "Enable Notifications" : "Bật thông báo", isOn: $viewModel.notificationsEnabled)
                         .onChange(of: viewModel.notificationsEnabled) { enabled in
                             viewModel.updateNotificationsEnabled(enabled)
                             if enabled {
@@ -22,7 +23,7 @@ struct SettingsView: View {
                         }
                     
                     if viewModel.notificationsEnabled {
-                        Picker("Tần suất", selection: $viewModel.notificationFrequency) {
+                        Picker(localizationManager.currentLanguage == "en" ? "Frequency" : "Tần suất", selection: $viewModel.notificationFrequency) {
                             ForEach(NotificationFrequency.allCases, id: \.self) { frequency in
                                 Text(frequency.displayName).tag(frequency)
                             }
@@ -33,8 +34,8 @@ struct SettingsView: View {
                             notificationManager.scheduleHourlyNotifications()
                         }
                         
-                        Button("Test thông báo") {
-                            NotificationScheduler.shared.scheduleTestNotification()
+                        Button(localizationManager.currentLanguage == "en" ? "Test Notification" : "Test thông báo") {
+                            notificationManager.scheduleTestNotification()
                             showingNotificationTest = true
                         }
                         .foregroundColor(.orange)
@@ -42,7 +43,7 @@ struct SettingsView: View {
                 }
                 
                 // Content Settings
-                Section("Nội Dung") {
+                Section(localizationManager.content) {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Mức độ cay mặc định:")
@@ -68,13 +69,15 @@ struct SettingsView: View {
                             viewModel.updateSafetyFilters(enabled)
                         }
                     
-                    Picker("Ngôn ngữ", selection: $viewModel.preferredLanguage) {
-                        Text("Tiếng Việt").tag("vi")
-                        Text("English").tag("en")
+                    Picker(localizationManager.language, selection: $viewModel.preferredLanguage) {
+                        ForEach(localizationManager.languageOptions, id: \.code) { option in
+                            Text(option.name).tag(option.code)
+                        }
                     }
                     .pickerStyle(MenuPickerStyle())
                     .onChange(of: viewModel.preferredLanguage) { newValue in
                         viewModel.updatePreferredLanguage(newValue)
+                        localizationManager.setLanguage(newValue)
                     }
                 }
 
@@ -178,37 +181,37 @@ struct SettingsView: View {
                 }
 
                 // Data Management
-                Section("Dữ Liệu") {
-                    Button("Xuất cài đặt") {
+                Section(localizationManager.data) {
+                    Button(localizationManager.exportSettings) {
                         viewModel.exportSettings()
                     }
                     .foregroundColor(.blue)
 
-                    Button("Nhập cài đặt") {
+                    Button(localizationManager.importSettings) {
                         viewModel.importSettings()
                     }
                     .foregroundColor(.blue)
 
                     Divider()
 
-                    Button("Xóa lịch sử roast") {
+                    Button(localizationManager.clearHistory) {
                         viewModel.clearRoastHistory()
                     }
                     .foregroundColor(.red)
 
-                    Button("Xóa danh sách yêu thích") {
+                    Button(localizationManager.clearFavorites) {
                         viewModel.clearFavorites()
                     }
                     .foregroundColor(.red)
 
-                    Button("Đặt lại tất cả cài đặt") {
+                    Button(localizationManager.resetSettings) {
                         viewModel.resetAllSettings()
                     }
                     .foregroundColor(.red)
                 }
                 
                 // Version Info
-                Section("Phiên Bản") {
+                Section(localizationManager.version) {
                     HStack {
                         Text("Phiên bản")
                         Spacer()
@@ -260,10 +263,10 @@ struct SettingsView: View {
         .sheet(isPresented: $showingAbout) {
             AboutView()
         }
-        .alert("Thông báo test", isPresented: $showingNotificationTest) {
+        .alert(localizationManager.currentLanguage == "en" ? "Test Notification" : "Thông báo test", isPresented: $showingNotificationTest) {
             Button("OK") { }
         } message: {
-            Text("Thông báo test sẽ xuất hiện sau 5 giây!")
+            Text(localizationManager.currentLanguage == "en" ? "Test notification will appear in 5 seconds!" : "Thông báo test sẽ xuất hiện sau 5 giây!")
         }
         .onAppear {
             viewModel.loadSettings()

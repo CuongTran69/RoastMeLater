@@ -3,6 +3,7 @@ import UIKit
 
 struct RoastGeneratorView: View {
     @StateObject private var viewModel = RoastGeneratorViewModel()
+    @EnvironmentObject var localizationManager: LocalizationManager
     @State private var showingCategoryPicker = false
     @State private var isGenerating = false
     @State private var showCopySuccess = false
@@ -63,7 +64,7 @@ struct RoastGeneratorView: View {
                             HStack {
                                 Image(systemName: "tag.fill")
                                     .foregroundColor(.orange)
-                                Text("Danh mục")
+                                Text(localizationManager.category)
                                     .font(.headline)
                                     .fontWeight(.semibold)
                                 Spacer()
@@ -80,7 +81,7 @@ struct RoastGeneratorView: View {
                                         .foregroundColor(.orange)
                                         .frame(width: 24, height: 24)
 
-                                    Text(viewModel.selectedCategory.displayName)
+                                    Text(localizationManager.categoryName(viewModel.selectedCategory))
                                         .font(.body)
                                         .fontWeight(.medium)
                                         .foregroundColor(.primary)
@@ -102,7 +103,7 @@ struct RoastGeneratorView: View {
                             HStack {
                                 Image(systemName: "flame.fill")
                                     .foregroundColor(.orange)
-                                Text("Mức độ cay")
+                                Text(localizationManager.spiceLevel)
                                     .font(.headline)
                                     .fontWeight(.semibold)
 
@@ -151,7 +152,7 @@ struct RoastGeneratorView: View {
                                 } else {
                                     Image(systemName: "sparkles")
                                 }
-                                Text(isGenerating ? "Đang tạo..." : "Tạo Roast Mới")
+                                Text(isGenerating ? localizationManager.generating : localizationManager.generateRoast)
                             }
                             .font(.headline)
                             .foregroundColor(.white)
@@ -223,14 +224,7 @@ struct RoastGeneratorView: View {
     }
 
     private func getSpiceLevelDescription(_ level: Int) -> String {
-        switch level {
-        case 1: return "Nhẹ nhàng"
-        case 2: return "Vừa phải"
-        case 3: return "Trung bình"
-        case 4: return "Cay nồng"
-        case 5: return "Cực cay"
-        default: return "Trung bình"
-        }
+        return localizationManager.spiceLevelName(level)
     }
 
     private func getSpiceLevelEmoji(_ level: Int) -> String {
@@ -447,13 +441,15 @@ struct RoastCardView: View {
 }
 
 struct RoastPlaceholderView: View {
+    @EnvironmentObject var localizationManager: LocalizationManager
+
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "quote.bubble")
                 .font(.system(size: 50))
                 .foregroundColor(.gray.opacity(0.5))
 
-            Text("Chọn danh mục và mức độ cay, sau đó nhấn tạo roast!")
+            Text(localizationManager.currentLanguage == "en" ? "Choose category and spice level, then tap generate roast!" : "Chọn danh mục và mức độ cay, sau đó nhấn tạo roast!")
                 .font(.headline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -471,6 +467,7 @@ struct CategoryPickerView: View {
     let selectedCategory: RoastCategory
     let onCategorySelected: (RoastCategory) -> Void
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var localizationManager: LocalizationManager
 
     var body: some View {
         NavigationView {
@@ -482,11 +479,11 @@ struct CategoryPickerView: View {
                         .foregroundColor(.orange)
 
                     VStack(spacing: 8) {
-                        Text("Chọn Chủ Đề Roast")
+                        Text(localizationManager.selectCategory)
                             .font(.title2)
                             .fontWeight(.bold)
 
-                        Text("Chọn tình huống công việc bạn muốn được roast")
+                        Text(localizationManager.currentLanguage == "en" ? "Choose the work situation you want to be roasted about" : "Chọn tình huống công việc bạn muốn được roast")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -536,13 +533,13 @@ struct CategoryPickerView: View {
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if #available(iOS 16.0, *) {
-                        Button("Xong") {
+                        Button(localizationManager.done) {
                             dismiss()
                         }
                         .foregroundColor(.orange)
                         .fontWeight(.semibold)
                     } else {
-                        Button("Xong") {
+                        Button(localizationManager.done) {
                             dismiss()
                         }
                         .foregroundColor(.orange)
@@ -557,6 +554,7 @@ struct CategoryCard: View {
     let category: RoastCategory
     let isSelected: Bool
     let onTap: () -> Void
+    @EnvironmentObject var localizationManager: LocalizationManager
 
     var body: some View {
         Button(action: onTap) {
@@ -574,14 +572,14 @@ struct CategoryCard: View {
 
                 // Title and description
                 VStack(spacing: 4) {
-                    Text(category.displayName)
+                    Text(localizationManager.categoryName(category))
                         .font(.headline)
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
 
-                    Text(category.description)
+                    Text(localizationManager.categoryDescription(category))
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -594,7 +592,7 @@ struct CategoryCard: View {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
                             .font(.caption)
-                        Text("Đã chọn")
+                        Text(localizationManager.currentLanguage == "en" ? "Selected" : "Đã chọn")
                             .font(.caption2)
                             .fontWeight(.medium)
                             .foregroundColor(.green)

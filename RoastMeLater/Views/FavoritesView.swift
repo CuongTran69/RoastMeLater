@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FavoritesView: View {
     @StateObject private var viewModel = FavoritesViewModel()
+    @EnvironmentObject var localizationManager: LocalizationManager
     @State private var searchText = ""
     let onNavigateToRoastGenerator: () -> Void
     @State private var showingShareSheet = false
@@ -23,10 +24,10 @@ struct FavoritesView: View {
                         }
                     }
                     .listStyle(PlainListStyle())
-                    .searchable(text: $searchText, prompt: "Tìm kiếm roast yêu thích...")
+                    .searchable(text: $searchText, prompt: localizationManager.searchFavorites)
                 }
             }
-            .navigationTitle("Yêu Thích")
+            .navigationTitle(localizationManager.tabFavorites)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
