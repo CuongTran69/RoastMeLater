@@ -10,8 +10,8 @@ struct Constants {
         static let bundleIdentifier = "com.roastme.app"
         static let supportEmail = "support@roastme.app"
         static let appStoreURL = "https://apps.apple.com/app/roastme"
-        static let minimumIOSVersion = "16.5"
-        static let targetIOSVersion = "17.0"
+        static let minimumIOSVersion = "15.6"
+        static let targetIOSVersion = "16.0"
     }
     
     // MARK: - API Configuration
