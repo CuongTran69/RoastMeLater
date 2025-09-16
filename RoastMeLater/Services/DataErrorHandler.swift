@@ -3,11 +3,22 @@ import RxSwift
 
 // MARK: - Error Recovery Strategies
 
-enum ErrorRecoveryStrategy {
+enum ErrorRecoveryStrategy: Equatable {
     case retry
     case skip
     case abort
     case fallback(Data)
+
+    static func == (lhs: ErrorRecoveryStrategy, rhs: ErrorRecoveryStrategy) -> Bool {
+        switch (lhs, rhs) {
+        case (.retry, .retry), (.skip, .skip), (.abort, .abort):
+            return true
+        case (.fallback(let lhsData), .fallback(let rhsData)):
+            return lhsData == rhsData
+        default:
+            return false
+        }
+    }
 }
 
 struct ErrorRecoveryOption {
@@ -30,13 +41,13 @@ struct ErrorContext {
 
 enum DataOperation {
     case export
-    case import
+    case dataImport  // Changed from 'import' to avoid keyword conflict
     case validation
 }
 
 // MARK: - Enhanced Error Types
 
-enum DataManagementError: Error, LocalizedError {
+enum DataManagementError: Error, LocalizedError, Equatable {
     // Export Errors
     case exportNoData
     case exportSerializationFailed(underlying: Error)
@@ -138,6 +149,41 @@ enum DataManagementError: Error, LocalizedError {
             return "Kiểm tra kết nối mạng và thử lại"
         default:
             return "Thử lại hoặc liên hệ hỗ trợ nếu vấn đề tiếp tục"
+        }
+    }
+
+    static func == (lhs: DataManagementError, rhs: DataManagementError) -> Bool {
+        switch (lhs, rhs) {
+        case (.exportNoData, .exportNoData),
+             (.exportCancelled, .exportCancelled),
+             (.importCancelled, .importCancelled):
+            return true
+        case (.exportSerializationFailed, .exportSerializationFailed),
+             (.exportStorageError, .exportStorageError),
+             (.importStorageError, .importStorageError),
+             (.networkError, .networkError),
+             (.unknownError, .unknownError):
+            return true
+        case (.exportFileWriteFailed(let lhsPath, _), .exportFileWriteFailed(let rhsPath, _)):
+            return lhsPath == rhsPath
+        case (.exportInsufficientStorage(let lhsReq, let lhsAvail), .exportInsufficientStorage(let rhsReq, let rhsAvail)):
+            return lhsReq == rhsReq && lhsAvail == rhsAvail
+        case (.exportPermissionDenied(let lhsPath), .exportPermissionDenied(let rhsPath)):
+            return lhsPath == rhsPath
+        case (.importInvalidFileFormat(let lhsDetails), .importInvalidFileFormat(let rhsDetails)):
+            return lhsDetails == rhsDetails
+        case (.importUnsupportedVersion(let lhsVer, let lhsSupported), .importUnsupportedVersion(let rhsVer, let rhsSupported)):
+            return lhsVer == rhsVer && lhsSupported == rhsSupported
+        case (.importCorruptedData(let lhsField, let lhsReason), .importCorruptedData(let rhsField, let rhsReason)):
+            return lhsField == rhsField && lhsReason == rhsReason
+        case (.importValidationFailed(let lhsErrors), .importValidationFailed(let rhsErrors)):
+            return lhsErrors == rhsErrors
+        case (.importFileNotFound(let lhsPath), .importFileNotFound(let rhsPath)):
+            return lhsPath == rhsPath
+        case (.importPermissionDenied(let lhsPath), .importPermissionDenied(let rhsPath)):
+            return lhsPath == rhsPath
+        default:
+            return false
         }
     }
 }

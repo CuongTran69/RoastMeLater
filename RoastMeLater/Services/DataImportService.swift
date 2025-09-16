@@ -117,10 +117,14 @@ enum DataImportError: Error, LocalizedError {
     }
 }
 
-struct ValidationError {
+struct ValidationError: Equatable {
     let field: String
     let value: Any?
     let reason: String
+
+    static func == (lhs: ValidationError, rhs: ValidationError) -> Bool {
+        return lhs.field == rhs.field && lhs.reason == rhs.reason
+    }
 }
 
 // MARK: - Data Import Service
