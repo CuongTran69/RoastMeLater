@@ -27,6 +27,7 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     @Published var showingImportPreview = false
     @Published var showingExportOptions = false
     @Published var showingPrivacyNotice = false
+    @Published var showExportSuccess = false
     @Published var exportOptions = ExportOptions.default
     @Published var importOptions = ImportOptions.merge
     @Published var privacyNotice: PrivacyNotice?
@@ -572,6 +573,25 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
         guard let options = currentExportOptions else { return }
         showingPrivacyNotice = false
         performExport(with: options)
+    }
+
+    private func performExport(with options: ExportOptions) {
+        isExporting = true
+        exportProgress = nil
+
+        dataExportService.exportData(options: options)
+            .observe(on: MainScheduler.instance)
+            .subscribe(onNext: { [weak self] progress in
+                self?.exportProgress = progress
+                if case .completed = progress.phase {
+                    self?.isExporting = false
+                    self?.showExportSuccess = true
+                }
+            }, onError: { [weak self] error in
+                self?.isExporting = false
+                self?.handleError(error)
+            })
+            .disposed(by: disposeBag)
     }
 
     func cancelPrivacyNotice() {
