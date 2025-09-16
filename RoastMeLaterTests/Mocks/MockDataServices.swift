@@ -28,76 +28,124 @@ class MockStorageService: StorageServiceProtocol {
     
     // MARK: - Roast Methods
     
-    func getAllRoasts() -> Observable<[Roast]> {
+    func getRoastHistory() -> [Roast] {
         getAllRoastsCalled = true
-        
-        if shouldFailGetRoasts {
-            return Observable.error(MockError.storageError)
-        }
-        
-        return Observable.just(roastsToReturn)
+        return roastsToReturn
+    }
+
+    func getFavoriteRoasts() -> [Roast] {
+        return roastsToReturn.filter { $0.isFavorite }
     }
     
-    func saveRoast(_ roast: Roast) -> Observable<Void> {
+    func saveRoast(_ roast: Roast) {
         saveRoastCalled = true
-        
-        if shouldFailSaveRoasts {
-            return Observable.error(MockError.storageError)
-        }
-        
         roastsToReturn.append(roast)
-        return Observable.just(())
+    }
+
+    func toggleFavorite(roastId: UUID) {
+        if let index = roastsToReturn.firstIndex(where: { $0.id == roastId }) {
+            roastsToReturn[index] = Roast(
+                id: roastsToReturn[index].id,
+                content: roastsToReturn[index].content,
+                category: roastsToReturn[index].category,
+                spiceLevel: roastsToReturn[index].spiceLevel,
+                language: roastsToReturn[index].language,
+                createdAt: roastsToReturn[index].createdAt,
+                isFavorite: !roastsToReturn[index].isFavorite
+            )
+        }
+    }
+
+    func deleteRoast(roastId: UUID) {
+        roastsToReturn.removeAll { $0.id == roastId }
     }
     
-    func deleteRoast(withId id: UUID) -> Observable<Void> {
-        roastsToReturn.removeAll { $0.id == id }
-        return Observable.just(())
+    func clearAllData() {
+        roastsToReturn.removeAll()
+        preferencesToReturn = UserPreferences()
     }
-    
-    func updateRoast(_ roast: Roast) -> Observable<Void> {
-        if let index = roastsToReturn.firstIndex(where: { $0.id == roast.id }) {
-            roastsToReturn[index] = roast
         }
         return Observable.just(())
     }
     
-    func bulkSaveRoasts(_ roasts: [Roast]) -> Observable<BulkOperationResult> {
+    func bulkSaveRoasts(_ roasts: [Roast], strategy: BulkSaveStrategy = .append) -> BulkOperationResult {
         bulkSaveRoastsCalled = true
-        
+
         if shouldFailSaveRoasts {
-            return Observable.error(MockError.storageError)
+            return BulkOperationResult(
+                success: false,
+                processedCount: 0,
+                skippedCount: 0,
+                errors: [BulkOperationError(itemId: "mock", error: MockError.storageError)]
+            )
         }
-        
+
         roastsToReturn.append(contentsOf: roasts)
-        
-        return Observable.just(BulkOperationResult(
-            successCount: roasts.count,
-            failureCount: 0,
+
+        return BulkOperationResult(
+            success: true,
+            processedCount: roasts.count,
+            skippedCount: 0,
             errors: []
-        ))
+        )
     }
     
     // MARK: - Preferences Methods
     
-    func getUserPreferences() -> Observable<UserPreferences> {
+    func getUserPreferences() -> UserPreferences {
         getUserPreferencesCalled = true
-        
-        if shouldFailGetPreferences {
-            return Observable.error(MockError.storageError)
-        }
-        
-        return Observable.just(preferencesToReturn)
+        return preferencesToReturn
     }
     
-    func saveUserPreferences(_ preferences: UserPreferences) -> Observable<Void> {
+    func saveUserPreferences(_ preferences: UserPreferences) {
         saveUserPreferencesCalled = true
-        
-        if shouldFailSavePreferences {
-            return Observable.error(MockError.storageError)
-        }
-        
         preferencesToReturn = preferences
-        return Observable.just(())
+    }
+
+    func bulkUpdateFavorites(_ favoriteIds: [UUID]) -> BulkOperationResult {
+        bulkUpdateFavoritesCalled = true
+
+        for roastIndex in roastsToReturn.indices {
+            let roast = roastsToReturn[roastIndex]
+            let shouldBeFavorite = favoriteIds.contains(roast.id)
+            if roast.isFavorite != shouldBeFavorite {
+                roastsToReturn[roastIndex] = Roast(
+                    id: roast.id,
+                    content: roast.content,
+                    category: roast.category,
+                    spiceLevel: roast.spiceLevel,
+                    language: roast.language,
+                    createdAt: roast.createdAt,
+                    isFavorite: shouldBeFavorite
+                )
+            }
+        }
+
+        return BulkOperationResult(
+            success: true,
+            processedCount: favoriteIds.count,
+            skippedCount: 0,
+            errors: []
+        )
+    }
+
+    func validateDataIntegrity() -> DataIntegrityResult {
+        validateDataIntegrityCalled = true
+        return DataIntegrityResult(isValid: true, issues: [])
+    }
+
+    func createDataBackup() -> DataBackup? {
+        return DataBackup(
+            roasts: roastsToReturn,
+            preferences: preferencesToReturn,
+            timestamp: Date()
+        )
+    }
+
+    func restoreFromBackup(_ backup: DataBackup) -> Bool {
+        roastsToReturn = backup.roasts
+        preferencesToReturn = backup.preferences
+        return true
     }
     
     // MARK: - Favorites Methods
