@@ -18,6 +18,17 @@ struct Roast: Codable, Identifiable, Equatable {
         self.createdAt = Date()
         self.isFavorite = false
     }
+
+    // Full initializer for creating instances with all properties
+    init(id: UUID, content: String, category: RoastCategory, spiceLevel: Int, language: String, createdAt: Date, isFavorite: Bool) {
+        self.id = id
+        self.content = content
+        self.category = category
+        self.spiceLevel = spiceLevel
+        self.language = language
+        self.createdAt = createdAt
+        self.isFavorite = isFavorite
+    }
     
     // For preview and testing
     static let sample = Roast(
