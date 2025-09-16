@@ -148,7 +148,7 @@ struct ErrorRecoveryView: View {
         switch operation {
         case .export:
             return localizationManager.currentLanguage == "en" ? "Export Data" : "Xuất Dữ Liệu"
-        case .import:
+        case .dataImport:
             return localizationManager.currentLanguage == "en" ? "Import Data" : "Nhập Dữ Liệu"
         case .validation:
             return localizationManager.currentLanguage == "en" ? "Data Validation" : "Xác Thực Dữ Liệu"

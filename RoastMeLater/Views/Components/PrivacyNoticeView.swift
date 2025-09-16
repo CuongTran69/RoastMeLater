@@ -49,7 +49,7 @@ struct PrivacyNoticeView: View {
                     AcknowledgmentSection(hasReadNotice: $hasReadNotice)
                     
                     // Action Buttons
-                    ActionButtonsSection(
+                    PrivacyActionButtonsSection(
                         hasReadNotice: hasReadNotice,
                         hasHighSeverityIssues: complianceIssues.contains { $0.severity == .high },
                         onAccept: onAccept,
@@ -340,12 +340,12 @@ struct AcknowledgmentSection: View {
     }
 }
 
-struct ActionButtonsSection: View {
+struct PrivacyActionButtonsSection: View {
     let hasReadNotice: Bool
     let hasHighSeverityIssues: Bool
     let onAccept: () -> Void
     let onCancel: () -> Void
-    
+
     @EnvironmentObject var localizationManager: LocalizationManager
     
     var body: some View {

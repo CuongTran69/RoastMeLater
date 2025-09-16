@@ -173,7 +173,6 @@ struct ExportOptionsView: View {
                         viewModel.generatePrivacyNotice(for: options)
                         dismiss()
                     }
-                    .fontWeight(.semibold)
                 }
             }
         }

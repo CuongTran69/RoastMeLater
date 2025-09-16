@@ -456,7 +456,7 @@ class LocalizationManager: ObservableObject {
         switch operation {
         case .export:
             return exportData
-        case .import:
+        case .dataImport:
             return importData
         case .validation:
             return currentLanguage == "en" ? "Data Validation" : "Xác Thực Dữ Liệu"
