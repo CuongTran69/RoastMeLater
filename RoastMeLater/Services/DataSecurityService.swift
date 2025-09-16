@@ -112,31 +112,38 @@ class DataSanitizationService: DataSanitizationProtocol {
         if !config.anonymizeContent {
             return roasts
         }
-        
+
         return roasts.map { roast in
-            var sanitized = roast
-            sanitized.content = anonymizeRoastContent(roast.content)
-            return sanitized
+            // Create a new Roast with sanitized content
+            Roast(
+                id: roast.id,
+                content: anonymizeRoastContent(roast.content),
+                category: roast.category,
+                spiceLevel: roast.spiceLevel,
+                language: roast.language,
+                createdAt: roast.createdAt,
+                isFavorite: roast.isFavorite
+            )
         }
     }
     
     func sanitizeMetadata(_ metadata: ExportMetadata, config: SecurityConfiguration) -> ExportMetadata {
-        var sanitized = metadata
-        
-        if config.excludeDeviceInfo {
-            sanitized.deviceInfo = DeviceInfo(
-                platform: "iOS",
-                osVersion: "Hidden",
-                appBuild: "Hidden"
-            )
-        }
-        
-        if config.addWatermark {
-            // Add privacy watermark to version
-            sanitized.version = "\(metadata.version)-PRIVACY"
-        }
-        
-        return sanitized
+        let sanitizedDeviceInfo = config.excludeDeviceInfo ?
+            DeviceInfo(platform: "iOS", osVersion: "Hidden", appBuild: "Hidden") :
+            metadata.deviceInfo
+
+        let sanitizedVersion = config.addWatermark ?
+            "\(metadata.version)-PRIVACY" :
+            metadata.version
+
+        return ExportMetadata(
+            version: sanitizedVersion,
+            dataVersion: metadata.dataVersion,
+            exportDate: metadata.exportDate,
+            totalRoasts: metadata.totalRoasts,
+            totalFavorites: metadata.totalFavorites,
+            deviceInfo: sanitizedDeviceInfo
+        )
     }
     
     func generatePrivacyNotice(for config: SecurityConfiguration) -> PrivacyNotice {

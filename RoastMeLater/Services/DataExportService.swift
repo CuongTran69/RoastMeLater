@@ -119,6 +119,7 @@ protocol DataExportServiceProtocol {
     func exportData(options: ExportOptions) -> Observable<ExportProgress>
     func estimateExportSize() -> Observable<Int64>
     func validateExportData() -> Observable<Bool>
+    func generatePrivacyNotice(for options: ExportOptions) -> Observable<(PrivacyNotice, [ComplianceIssue])>
 }
 
 class DataExportService: DataExportServiceProtocol {
@@ -517,35 +518,33 @@ class DataExportService: DataExportServiceProtocol {
             let privacyNotice = self.sanitizationService.generatePrivacyNotice(for: securityConfig)
 
             // Generate mock export data for compliance checking
-            self.storageService.getAllRoasts()
-                .flatMap { roasts in
-                    self.storageService.getUserPreferences()
-                        .map { preferences in (roasts, preferences) }
-                }
-                .subscribe(onNext: { roasts, preferences in
-                    let mockExportData = AppDataExport(
-                        metadata: ExportMetadata(
-                            version: "1.0.0",
-                            dataVersion: self.currentDataVersion,
-                            exportDate: Date(),
-                            deviceInfo: DeviceInfo(platform: "iOS", osVersion: "17.0", appBuild: "1.0"),
-                            totalRoasts: roasts.count,
-                            totalFavorites: 0
-                        ),
-                        userPreferences: preferences,
-                        roastHistory: roasts,
-                        favorites: [],
-                        statistics: nil
-                    )
+            let roasts = self.storageService.getRoastHistory()
+            let preferences = self.storageService.getUserPreferences()
 
-                    let complianceIssues = PrivacyCompliance.validateExportCompliance(mockExportData, config: securityConfig)
+            let mockExportData = AppDataExport(
+                metadata: ExportMetadata(
+                    version: "1.0.0",
+                    dataVersion: self.currentDataVersion,
+                    exportDate: Date(),
+                    totalRoasts: roasts.count,
+                    totalFavorites: 0,
+                    deviceInfo: DeviceInfo(platform: "iOS", osVersion: "17.0", appBuild: "1.0")
+                ),
+                userPreferences: preferences,
+                roastHistory: roasts,
+                favorites: [],
+                statistics: ExportStatistics(
+                    categoryBreakdown: [:],
+                    averageSpiceLevel: 0,
+                    mostPopularCategory: nil,
+                    dateRange: nil
+                )
+            )
 
-                    observer.onNext((privacyNotice, complianceIssues))
-                    observer.onCompleted()
-                }, onError: { error in
-                    observer.onError(error)
-                })
-                .disposed(by: self.disposeBag)
+            let complianceIssues = PrivacyCompliance.validateExportCompliance(mockExportData, config: securityConfig)
+
+            observer.onNext((privacyNotice, complianceIssues))
+            observer.onCompleted()
 
             return Disposables.create()
         }
@@ -560,12 +559,18 @@ class DataExportService: DataExportServiceProtocol {
             addWatermark: false
         )
 
-        var secureData = exportData
+        // Apply sanitization and create new secure data
+        let sanitizedUserPreferences = sanitizationService.sanitizeUserPreferences(exportData.userPreferences, config: securityConfig)
+        let sanitizedRoastHistory = sanitizationService.sanitizeRoasts(exportData.roastHistory, config: securityConfig)
+        let sanitizedMetadata = sanitizationService.sanitizeMetadata(exportData.metadata, config: securityConfig)
 
-        // Apply sanitization
-        secureData.userPreferences = sanitizationService.sanitizeUserPreferences(exportData.userPreferences, config: securityConfig)
-        secureData.roastHistory = sanitizationService.sanitizeRoasts(exportData.roastHistory, config: securityConfig)
-        secureData.metadata = sanitizationService.sanitizeMetadata(exportData.metadata, config: securityConfig)
+        let secureData = AppDataExport(
+            metadata: sanitizedMetadata,
+            userPreferences: sanitizedUserPreferences,
+            roastHistory: sanitizedRoastHistory,
+            favorites: exportData.favorites,
+            statistics: exportData.statistics
+        )
 
         return secureData
     }
