@@ -21,8 +21,7 @@ struct RoastGeneratorView: View {
                             .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isGenerating)
 
                         Text("RoastMe")
-                            .font(.title)
-                            .fontWeight(.bold)
+                            .font(.title.weight(.bold))
                             .foregroundColor(.primary)
                     }
                     .padding(.top, 10)
@@ -65,8 +64,7 @@ struct RoastGeneratorView: View {
                                 Image(systemName: "tag.fill")
                                     .foregroundColor(.orange)
                                 Text(localizationManager.category)
-                                    .font(.headline)
-                                    .fontWeight(.semibold)
+                                    .font(.headline.weight(.semibold))
                                 Spacer()
                             }
 
@@ -82,8 +80,7 @@ struct RoastGeneratorView: View {
                                         .frame(width: 24, height: 24)
 
                                     Text(localizationManager.categoryName(viewModel.selectedCategory))
-                                        .font(.body)
-                                        .fontWeight(.medium)
+                                        .font(.body.weight(.medium))
                                         .foregroundColor(.primary)
 
                                     Spacer()
@@ -104,14 +101,12 @@ struct RoastGeneratorView: View {
                                 Image(systemName: "flame.fill")
                                     .foregroundColor(.orange)
                                 Text(localizationManager.spiceLevel)
-                                    .font(.headline)
-                                    .fontWeight(.semibold)
+                                    .font(.headline.weight(.semibold))
 
                                 Spacer()
 
                                 Text("\(viewModel.spiceLevel)/5")
-                                    .font(.title3)
-                                    .fontWeight(.bold)
+                                    .font(.title3.weight(.bold))
                                     .foregroundColor(.orange)
                             }
 
@@ -251,6 +246,7 @@ struct RoastGeneratorView: View {
 }
 
 struct RoastCardView: View {
+    @EnvironmentObject var localizationManager: LocalizationManager
     let roast: Roast
     let onFavoriteToggle: () -> Void
     let onCopy: () -> Void
@@ -268,9 +264,8 @@ struct RoastCardView: View {
                         .background(Color.orange.opacity(0.1))
                         .cornerRadius(6)
 
-                    Text(roast.category.displayName)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+                    Text(localizationManager.categoryName(roast.category))
+                        .font(.subheadline.weight(.medium))
                         .foregroundColor(.primary)
                 }
 
@@ -284,8 +279,7 @@ struct RoastCardView: View {
                             .foregroundColor(getFlameColor(level))
                     }
                     Text("\(roast.spiceLevel)/5")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
+                        .font(.caption2.weight(.semibold))
                         .foregroundColor(.secondary)
                 }
                 .padding(.horizontal, 8)
@@ -301,15 +295,13 @@ struct RoastCardView: View {
                         .foregroundColor(.orange.opacity(0.6))
                         .font(.caption)
                     Text("Roast của bạn:")
-                        .font(.caption)
-                        .fontWeight(.medium)
+                        .font(.caption.weight(.medium))
                         .foregroundColor(.secondary)
                     Spacer()
                 }
 
                 Text(roast.content)
-                    .font(.body)
-                    .fontWeight(.medium)
+                    .font(.body.weight(.medium))
                     .lineSpacing(4)
                     .foregroundColor(.primary)
                     .padding(.leading, 8)
@@ -382,8 +374,7 @@ struct RoastCardView: View {
                 Image(systemName: showCopyFeedback ? "checkmark" : "doc.on.doc")
                     .font(.caption)
                 Text(showCopyFeedback ? "Copied!" : "Copy")
-                    .font(.caption2)
-                    .fontWeight(.medium)
+                    .font(.caption2.weight(.medium))
             }
             .foregroundColor(showCopyFeedback ? .green : .blue)
             .padding(.horizontal, 6)
@@ -400,8 +391,7 @@ struct RoastCardView: View {
                 Image(systemName: "square.and.arrow.up")
                     .font(.caption)
                 Text("Share")
-                    .font(.caption2)
-                    .fontWeight(.medium)
+                    .font(.caption2.weight(.medium))
             }
             .foregroundColor(.orange)
             .padding(.horizontal, 6)
@@ -417,8 +407,7 @@ struct RoastCardView: View {
                 Image(systemName: roast.isFavorite ? "heart.fill" : "heart")
                     .font(.caption)
                 Text(roast.isFavorite ? "Liked" : "Like")
-                    .font(.caption2)
-                    .fontWeight(.medium)
+                    .font(.caption2.weight(.medium))
             }
             .foregroundColor(roast.isFavorite ? .red : .gray)
             .padding(.horizontal, 6)
@@ -480,8 +469,7 @@ struct CategoryPickerView: View {
 
                     VStack(spacing: 8) {
                         Text(localizationManager.selectCategory)
-                            .font(.title2)
-                            .fontWeight(.bold)
+                            .font(.title2.weight(.bold))
 
                         Text(localizationManager.currentLanguage == "en" ? "Choose the work situation you want to be roasted about" : "Chọn tình huống công việc bạn muốn được roast")
                             .font(.subheadline)
@@ -537,7 +525,7 @@ struct CategoryPickerView: View {
                             dismiss()
                         }
                         .foregroundColor(.orange)
-                        .fontWeight(.semibold)
+                        .font(.body.weight(.semibold))
                     } else {
                         Button(localizationManager.done) {
                             dismiss()
@@ -573,8 +561,7 @@ struct CategoryCard: View {
                 // Title and description
                 VStack(spacing: 4) {
                     Text(localizationManager.categoryName(category))
-                        .font(.headline)
-                        .fontWeight(.semibold)
+                        .font(.headline.weight(.semibold))
                         .foregroundColor(.primary)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
@@ -593,8 +580,7 @@ struct CategoryCard: View {
                             .foregroundColor(.green)
                             .font(.caption)
                         Text(localizationManager.currentLanguage == "en" ? "Selected" : "Đã chọn")
-                            .font(.caption2)
-                            .fontWeight(.medium)
+                            .font(.caption2.weight(.medium))
                             .foregroundColor(.green)
                     }
                 }

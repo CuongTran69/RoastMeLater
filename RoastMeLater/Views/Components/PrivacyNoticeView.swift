@@ -21,8 +21,7 @@ struct PrivacyNoticeView: View {
                             .foregroundColor(.blue)
                         
                         Text(privacyNotice.title)
-                            .font(.title2)
-                            .fontWeight(.bold)
+                            .font(.title2.weight(.bold))
                             .multilineTextAlignment(.center)
                         
                         Text(privacyNotice.description)
@@ -58,11 +57,11 @@ struct PrivacyNoticeView: View {
                 }
                 .padding()
             }
-            .navigationTitle(localizationManager.currentLanguage == "en" ? "Privacy Notice" : "Thông Báo Quyền Riêng Tư")
+            .navigationTitle(Strings.Privacy.privacyNotice.localized(localizationManager.currentLanguage))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(localizationManager.cancel) {
+                    Button(Strings.Common.cancel.localized(localizationManager.currentLanguage)) {
                         onCancel()
                     }
                 }
@@ -74,17 +73,18 @@ struct PrivacyNoticeView: View {
 struct DataTypesSection: View {
     let dataTypes: [DataType]
     @EnvironmentObject var localizationManager: LocalizationManager
-    
+
+    private var currentLanguage: String { localizationManager.currentLanguage }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "doc.text")
                     .foregroundColor(.blue)
-                Text(localizationManager.currentLanguage == "en" ? "Data Included" : "Dữ Liệu Được Bao Gồm")
-                    .font(.headline)
-                    .fontWeight(.semibold)
+                Text(Strings.Privacy.dataIncluded.localized(currentLanguage))
+                    .font(.headline.weight(.semibold))
             }
-            
+
             VStack(spacing: 8) {
                 ForEach(dataTypes, id: \.displayName) { dataType in
                     HStack(spacing: 12) {
@@ -92,12 +92,12 @@ struct DataTypesSection: View {
                         Circle()
                             .fill(colorForSensitivity(dataType.sensitivityLevel))
                             .frame(width: 8, height: 8)
-                        
+
                         Text(dataType.displayName)
                             .font(.subheadline)
-                        
+
                         Spacer()
-                        
+
                         Text(sensitivityText(dataType.sensitivityLevel))
                             .font(.caption2)
                             .padding(.horizontal, 6)
@@ -114,7 +114,7 @@ struct DataTypesSection: View {
         .background(Color(.systemGray6))
         .cornerRadius(12)
     }
-    
+
     private func colorForSensitivity(_ level: SensitivityLevel) -> Color {
         switch level {
         case .low: return .green
@@ -122,12 +122,12 @@ struct DataTypesSection: View {
         case .high: return .red
         }
     }
-    
+
     private func sensitivityText(_ level: SensitivityLevel) -> String {
         switch level {
-        case .low: return localizationManager.currentLanguage == "en" ? "Low" : "Thấp"
-        case .medium: return localizationManager.currentLanguage == "en" ? "Medium" : "Trung bình"
-        case .high: return localizationManager.currentLanguage == "en" ? "High" : "Cao"
+        case .low: return Strings.Privacy.low.localized(currentLanguage)
+        case .medium: return Strings.Privacy.medium.localized(currentLanguage)
+        case .high: return Strings.Privacy.high.localized(currentLanguage)
         }
     }
 }
@@ -135,17 +135,16 @@ struct DataTypesSection: View {
 struct ComplianceIssuesSection: View {
     let issues: [ComplianceIssue]
     @EnvironmentObject var localizationManager: LocalizationManager
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "exclamationmark.triangle")
                     .foregroundColor(.orange)
-                Text(localizationManager.currentLanguage == "en" ? "Privacy Concerns" : "Vấn Đề Quyền Riêng Tư")
-                    .font(.headline)
-                    .fontWeight(.semibold)
+                Text(Strings.Privacy.privacyConcerns.localized(localizationManager.currentLanguage))
+                    .font(.headline.weight(.semibold))
             }
-            
+
             VStack(spacing: 8) {
                 ForEach(issues.indices, id: \.self) { index in
                     let issue = issues[index]
@@ -162,19 +161,20 @@ struct ComplianceIssuesSection: View {
 struct ComplianceIssueCard: View {
     let issue: ComplianceIssue
     @EnvironmentObject var localizationManager: LocalizationManager
-    
+
+    private var currentLanguage: String { localizationManager.currentLanguage }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: severityIcon(issue.severity))
                     .foregroundColor(severityColor(issue.severity))
-                
+
                 Text(issue.description)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                
+                    .font(.subheadline.weight(.medium))
+
                 Spacer()
-                
+
                 Text(severityText(issue.severity))
                     .font(.caption2)
                     .padding(.horizontal, 6)
@@ -183,7 +183,7 @@ struct ComplianceIssueCard: View {
                     .foregroundColor(severityColor(issue.severity))
                     .cornerRadius(4)
             }
-            
+
             Text(issue.recommendation)
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -192,7 +192,7 @@ struct ComplianceIssueCard: View {
         .background(Color(.systemBackground))
         .cornerRadius(8)
     }
-    
+
     private func severityIcon(_ severity: ComplianceSeverity) -> String {
         switch severity {
         case .low: return "info.circle"
@@ -200,7 +200,7 @@ struct ComplianceIssueCard: View {
         case .high: return "exclamationmark.octagon"
         }
     }
-    
+
     private func severityColor(_ severity: ComplianceSeverity) -> Color {
         switch severity {
         case .low: return .blue
@@ -208,12 +208,12 @@ struct ComplianceIssueCard: View {
         case .high: return .red
         }
     }
-    
+
     private func severityText(_ severity: ComplianceSeverity) -> String {
         switch severity {
-        case .low: return localizationManager.currentLanguage == "en" ? "Low" : "Thấp"
-        case .medium: return localizationManager.currentLanguage == "en" ? "Medium" : "Trung bình"
-        case .high: return localizationManager.currentLanguage == "en" ? "High" : "Cao"
+        case .low: return Strings.Privacy.low.localized(currentLanguage)
+        case .medium: return Strings.Privacy.medium.localized(currentLanguage)
+        case .high: return Strings.Privacy.high.localized(currentLanguage)
         }
     }
 }
@@ -221,27 +221,26 @@ struct ComplianceIssueCard: View {
 struct RecommendationsSection: View {
     let recommendations: [String]
     @EnvironmentObject var localizationManager: LocalizationManager
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "lightbulb")
                     .foregroundColor(.yellow)
-                Text(localizationManager.currentLanguage == "en" ? "Recommendations" : "Khuyến Nghị")
-                    .font(.headline)
-                    .fontWeight(.semibold)
+                Text(Strings.Privacy.recommendations.localized(localizationManager.currentLanguage))
+                    .font(.headline.weight(.semibold))
             }
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(recommendations, id: \.self) { recommendation in
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "checkmark.circle")
                             .foregroundColor(.green)
                             .font(.caption)
-                        
+
                         Text(recommendation)
                             .font(.subheadline)
-                        
+
                         Spacer()
                     }
                 }
@@ -256,42 +255,37 @@ struct RecommendationsSection: View {
 struct PrivacyDetailsSection: View {
     @Binding var showingDetails: Bool
     @EnvironmentObject var localizationManager: LocalizationManager
-    
+
+    private var currentLanguage: String { localizationManager.currentLanguage }
+
     var body: some View {
         VStack(spacing: 8) {
             Button(action: { showingDetails.toggle() }) {
                 HStack {
-                    Text(localizationManager.currentLanguage == "en" ? "Privacy Details" : "Chi Tiết Quyền Riêng Tư")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+                    Text(Strings.Privacy.privacyDetails.localized(currentLanguage))
+                        .font(.subheadline.weight(.medium))
                     Spacer()
                     Image(systemName: showingDetails ? "chevron.up" : "chevron.down")
                         .font(.caption)
                 }
                 .foregroundColor(.blue)
             }
-            
+
             if showingDetails {
                 VStack(alignment: .leading, spacing: 12) {
                     PrivacyDetailItem(
-                        title: localizationManager.currentLanguage == "en" ? "Data Processing" : "Xử Lý Dữ Liệu",
-                        description: localizationManager.currentLanguage == "en" 
-                            ? "Data is processed locally on your device and exported as a JSON file."
-                            : "Dữ liệu được xử lý cục bộ trên thiết bị của bạn và xuất dưới dạng file JSON."
+                        title: Strings.Privacy.dataProcessing.localized(currentLanguage),
+                        description: Strings.Privacy.dataProcessingDesc.localized(currentLanguage)
                     )
-                    
+
                     PrivacyDetailItem(
-                        title: localizationManager.currentLanguage == "en" ? "Data Storage" : "Lưu Trữ Dữ Liệu",
-                        description: localizationManager.currentLanguage == "en"
-                            ? "Exported files are stored in your device's Files app and can be shared manually."
-                            : "File đã xuất được lưu trong ứng dụng Files của thiết bị và có thể được chia sẻ thủ công."
+                        title: Strings.Privacy.dataStorage.localized(currentLanguage),
+                        description: Strings.Privacy.dataStorageDesc.localized(currentLanguage)
                     )
-                    
+
                     PrivacyDetailItem(
-                        title: localizationManager.currentLanguage == "en" ? "Third-Party Access" : "Truy Cập Bên Thứ Ba",
-                        description: localizationManager.currentLanguage == "en"
-                            ? "No data is automatically sent to third parties. You control all sharing."
-                            : "Không có dữ liệu nào được tự động gửi đến bên thứ ba. Bạn kiểm soát mọi việc chia sẻ."
+                        title: Strings.Privacy.thirdPartyAccess.localized(currentLanguage),
+                        description: Strings.Privacy.thirdPartyAccessDesc.localized(currentLanguage)
                     )
                 }
                 .padding()
@@ -309,8 +303,7 @@ struct PrivacyDetailItem: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.caption)
-                .fontWeight(.semibold)
+                .font(.caption.weight(.semibold))
                 .foregroundColor(.blue)
             
             Text(description)
@@ -323,13 +316,11 @@ struct PrivacyDetailItem: View {
 struct AcknowledgmentSection: View {
     @Binding var hasReadNotice: Bool
     @EnvironmentObject var localizationManager: LocalizationManager
-    
+
     var body: some View {
         VStack(spacing: 12) {
             Toggle(isOn: $hasReadNotice) {
-                Text(localizationManager.currentLanguage == "en"
-                     ? "I have read and understand this privacy notice"
-                     : "Tôi đã đọc và hiểu thông báo quyền riêng tư này")
+                Text(Strings.Privacy.acknowledgment.localized(localizationManager.currentLanguage))
                     .font(.subheadline)
             }
             .toggleStyle(CheckboxToggleStyle())
@@ -347,16 +338,16 @@ struct PrivacyActionButtonsSection: View {
     let onCancel: () -> Void
 
     @EnvironmentObject var localizationManager: LocalizationManager
-    
+
+    private var currentLanguage: String { localizationManager.currentLanguage }
+
     var body: some View {
         VStack(spacing: 12) {
             if hasHighSeverityIssues {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(.red)
-                    Text(localizationManager.currentLanguage == "en"
-                         ? "High-risk privacy issues detected. Consider reviewing export options."
-                         : "Phát hiện vấn đề quyền riêng tư rủi ro cao. Xem xét lại tùy chọn xuất.")
+                    Text(Strings.Privacy.highRiskWarning.localized(currentLanguage))
                         .font(.caption)
                         .foregroundColor(.red)
                 }
@@ -364,19 +355,19 @@ struct PrivacyActionButtonsSection: View {
                 .background(Color.red.opacity(0.1))
                 .cornerRadius(8)
             }
-            
+
             HStack(spacing: 12) {
                 Button(action: onCancel) {
-                    Text(localizationManager.cancel)
+                    Text(Strings.Common.cancel.localized(currentLanguage))
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(Color(.systemGray5))
                         .foregroundColor(.primary)
                         .cornerRadius(10)
                 }
-                
+
                 Button(action: onAccept) {
-                    Text(localizationManager.currentLanguage == "en" ? "Continue Export" : "Tiếp Tục Xuất")
+                    Text(Strings.Privacy.continueExport.localized(currentLanguage))
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(hasReadNotice ? (hasHighSeverityIssues ? Color.orange : Color.green) : Color(.systemGray4))

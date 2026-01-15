@@ -51,11 +51,12 @@ enum DataManagementError: Error, LocalizedError, Equatable {
     // Export Errors
     case exportNoData
     case exportSerializationFailed(underlying: Error)
+    case exportStorageError(underlying: Error)
     case exportFileWriteFailed(path: String, underlying: Error)
     case exportInsufficientStorage(required: Int64, available: Int64)
     case exportPermissionDenied(path: String)
     case exportCancelled
-    
+
     // Import Errors
     case importInvalidFileFormat(details: String)
     case importUnsupportedVersion(version: Int, supported: [Int])
@@ -65,7 +66,7 @@ enum DataManagementError: Error, LocalizedError, Equatable {
     case importCancelled
     case importFileNotFound(path: String)
     case importPermissionDenied(path: String)
-    
+
     // General Errors
     case networkError(underlying: Error)
     case unknownError(underlying: Error)
@@ -77,6 +78,8 @@ enum DataManagementError: Error, LocalizedError, Equatable {
             return "Không có dữ liệu để xuất. Hãy tạo một số roast trước khi xuất dữ liệu."
         case .exportSerializationFailed(let error):
             return "Lỗi tạo file JSON: \(error.localizedDescription)"
+        case .exportStorageError(let error):
+            return "Lỗi lưu trữ khi xuất: \(error.localizedDescription)"
         case .exportFileWriteFailed(let path, let error):
             return "Không thể ghi file tại \(path): \(error.localizedDescription)"
         case .exportInsufficientStorage(let required, let available):

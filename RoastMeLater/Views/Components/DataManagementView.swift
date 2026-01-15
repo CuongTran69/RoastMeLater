@@ -11,17 +11,14 @@ struct DataManagementView: View {
                 HStack {
                     Image(systemName: "square.and.arrow.up")
                         .foregroundColor(.blue)
-                    Text(localizationManager.currentLanguage == "en" ? "Export Data" : "Xuất Dữ Liệu")
-                        .font(.headline)
-                        .fontWeight(.semibold)
+                    Text(Strings.DataManagement.Export.title.localized(localizationManager.currentLanguage))
+                        .font(.headline.weight(.semibold))
                 }
-                
-                Text(localizationManager.currentLanguage == "en" 
-                     ? "Export your roast history, favorites, and settings to a JSON file for backup or transfer."
-                     : "Xuất lịch sử roast, danh sách yêu thích và cài đặt ra file JSON để sao lưu hoặc chuyển đổi.")
+
+                Text(Strings.DataManagement.Export.description.localized(localizationManager.currentLanguage))
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 if viewModel.isExporting {
                     ExportProgressView(progress: viewModel.exportProgress)
                 } else {
@@ -30,7 +27,7 @@ struct DataManagementView: View {
                     }) {
                         HStack {
                             Image(systemName: "square.and.arrow.up")
-                            Text(localizationManager.currentLanguage == "en" ? "Export All Data" : "Xuất Tất Cả Dữ Liệu")
+                            Text(Strings.DataManagement.Export.exportAll.localized(localizationManager.currentLanguage))
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -38,13 +35,13 @@ struct DataManagementView: View {
                         .foregroundColor(.white)
                         .cornerRadius(10)
                     }
-                    
+
                     Button(action: {
                         viewModel.showExportOptions()
                     }) {
                         HStack {
                             Image(systemName: "gear")
-                            Text(localizationManager.currentLanguage == "en" ? "Export Options" : "Tùy Chọn Xuất")
+                            Text(Strings.DataManagement.Export.options.localized(localizationManager.currentLanguage))
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -63,17 +60,14 @@ struct DataManagementView: View {
                 HStack {
                     Image(systemName: "square.and.arrow.down")
                         .foregroundColor(.green)
-                    Text(localizationManager.currentLanguage == "en" ? "Import Data" : "Nhập Dữ Liệu")
-                        .font(.headline)
-                        .fontWeight(.semibold)
+                    Text(Strings.DataManagement.Import.title.localized(localizationManager.currentLanguage))
+                        .font(.headline.weight(.semibold))
                 }
-                
-                Text(localizationManager.currentLanguage == "en"
-                     ? "Import previously exported data from a JSON file. You can choose to merge with existing data or replace it completely."
-                     : "Nhập dữ liệu đã xuất trước đó từ file JSON. Bạn có thể chọn gộp với dữ liệu hiện có hoặc thay thế hoàn toàn.")
+
+                Text(Strings.DataManagement.Import.description.localized(localizationManager.currentLanguage))
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 if viewModel.isImporting {
                     ImportProgressView(progress: viewModel.importProgress)
                 } else {
@@ -82,7 +76,7 @@ struct DataManagementView: View {
                     }) {
                         HStack {
                             Image(systemName: "square.and.arrow.down")
-                            Text(localizationManager.currentLanguage == "en" ? "Import Data" : "Nhập Dữ Liệu")
+                            Text(Strings.DataManagement.Import.title.localized(localizationManager.currentLanguage))
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -188,19 +182,18 @@ struct ImportProgressView: View {
                 
                 if !progress.warnings.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(localizationManager.currentLanguage == "en" ? "Warnings:" : "Cảnh báo:")
-                            .font(.caption)
-                            .fontWeight(.semibold)
+                        Text(Strings.DataManagement.Import.warnings.localized(localizationManager.currentLanguage) + ":")
+                            .font(.caption.weight(.semibold))
                             .foregroundColor(.orange)
-                        
+
                         ForEach(progress.warnings.prefix(3), id: \.message) { warning in
                             Text("• \(warning.message)")
                                 .font(.caption2)
                                 .foregroundColor(.orange)
                         }
-                        
+
                         if progress.warnings.count > 3 {
-                            Text("... và \(progress.warnings.count - 3) cảnh báo khác")
+                            Text(Strings.DataManagement.Import.moreWarnings(progress.warnings.count - 3).localized(localizationManager.currentLanguage))
                                 .font(.caption2)
                                 .foregroundColor(.orange)
                         }
@@ -231,39 +224,37 @@ struct DataStatisticsView: View {
             HStack {
                 Image(systemName: "chart.bar")
                     .foregroundColor(.orange)
-                Text(localizationManager.currentLanguage == "en" ? "Data Overview" : "Tổng Quan Dữ Liệu")
-                    .font(.headline)
-                    .fontWeight(.semibold)
+                Text(Strings.DataManagement.dataOverview.localized(localizationManager.currentLanguage))
+                    .font(.headline.weight(.semibold))
             }
-            
+
             LazyVGrid(columns: [
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 12) {
                 StatCard(
-                    title: localizationManager.currentLanguage == "en" ? "Total Roasts" : "Tổng Roast",
+                    title: Strings.DataManagement.totalRoasts.localized(localizationManager.currentLanguage),
                     value: "\(viewModel.totalRoastsGenerated)",
                     icon: "flame.fill",
                     color: .orange
                 )
-                
+
                 StatCard(
-                    title: localizationManager.currentLanguage == "en" ? "Favorites" : "Yêu Thích",
+                    title: Strings.DataManagement.favorites.localized(localizationManager.currentLanguage),
                     value: "\(viewModel.totalFavorites)",
                     icon: "heart.fill",
                     color: .red
                 )
             }
-            
+
             if let category = viewModel.mostPopularCategory {
                 HStack {
                     Image(systemName: "star.fill")
                         .foregroundColor(.yellow)
-                    Text(localizationManager.currentLanguage == "en" ? "Most Popular:" : "Phổ biến nhất:")
+                    Text(Strings.DataManagement.mostPopular.localized(localizationManager.currentLanguage))
                         .font(.caption)
                     Text(localizationManager.categoryName(category))
-                        .font(.caption)
-                        .fontWeight(.semibold)
+                        .font(.caption.weight(.semibold))
                     Spacer()
                 }
             }
@@ -287,8 +278,7 @@ struct StatCard: View {
                 .foregroundColor(color)
             
             Text(value)
-                .font(.title2)
-                .fontWeight(.bold)
+                .font(.title2.weight(.bold))
             
             Text(title)
                 .font(.caption)

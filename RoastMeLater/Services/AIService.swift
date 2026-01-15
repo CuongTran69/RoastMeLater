@@ -10,7 +10,7 @@ class AIService: AIServiceProtocol {
     private let session = URLSession.shared
     private let storageService: StorageServiceProtocol
 
-    init(storageService: StorageServiceProtocol = StorageService()) {
+    init(storageService: StorageServiceProtocol = StorageService.shared) {
         self.storageService = storageService
     }
 
@@ -106,23 +106,47 @@ class AIService: AIServiceProtocol {
 
                 do {
                     let response = try JSONDecoder().decode(OpenAIResponse.self, from: data)
-                    if let content = response.choices.first?.message.content {
-                        // Clean and process the content to ensure only one roast
-                        let cleanedContent = self.cleanRoastContent(content)
-                        print("✅ API Success: \(cleanedContent)")
 
-                        let roast = Roast(
-                            content: cleanedContent,
-                            category: category,
-                            spiceLevel: spiceLevel,
-                            language: language ?? "vi"
-                        )
-                        observer.onNext(roast)
-                        observer.onCompleted()
-                    } else {
-                        print("❌ Invalid response structure")
+                    // Validate response structure
+                    guard !response.choices.isEmpty else {
+                        print("❌ API returned empty choices array")
                         observer.onError(AIServiceError.invalidResponse)
+                        return
                     }
+
+                    guard let firstChoice = response.choices.first else {
+                        print("❌ Invalid response structure - no first choice")
+                        observer.onError(AIServiceError.invalidResponse)
+                        return
+                    }
+
+                    let content = firstChoice.message.content
+                    guard !content.isEmpty else {
+                        print("❌ Empty content in response")
+                        observer.onError(AIServiceError.invalidResponse)
+                        return
+                    }
+
+                    // Clean and process the content to ensure only one roast
+                    let cleanedContent = self.cleanRoastContent(content)
+
+                    // Validate cleaned content is not empty
+                    guard !cleanedContent.isEmpty else {
+                        print("❌ Cleaned content is empty")
+                        observer.onError(AIServiceError.invalidResponse)
+                        return
+                    }
+
+                    print("✅ API Success: \(cleanedContent)")
+
+                    let roast = Roast(
+                        content: cleanedContent,
+                        category: category,
+                        spiceLevel: spiceLevel,
+                        language: language ?? "vi"
+                    )
+                    observer.onNext(roast)
+                    observer.onCompleted()
                 } catch {
                     print("❌ JSON Decode Error: \(error)")
                     observer.onError(error)
@@ -167,6 +191,11 @@ class AIService: AIServiceProtocol {
     private func cleanRoastContent(_ content: String) -> String {
         // Remove extra whitespace and newlines
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Return empty if content is empty after trimming
+        guard !trimmed.isEmpty else {
+            return ""
+        }
 
         // Split by common separators and take only the first meaningful sentence
         let separators = ["\n\n", "\n", ". ", "! ", "? "]
@@ -521,7 +550,13 @@ class AIService: AIServiceProtocol {
     // MARK: - API Testing
     func testAPIConnection(apiKey: String, baseURL: String, modelName: String) -> Observable<Bool> {
         return Observable.create { observer in
+            print("🔌 AIService.testAPIConnection called")
+            print("  API Key: \(apiKey.isEmpty ? "EMPTY" : "HAS_VALUE (\(apiKey.count) chars)")")
+            print("  Base URL: \(baseURL)")
+            print("  Model: \(modelName)")
+
             guard let url = URL(string: baseURL) else {
+                print("❌ Invalid URL: \(baseURL)")
                 observer.onNext(false)
                 observer.onCompleted()
                 return Disposables.create()
@@ -546,28 +581,40 @@ class AIService: AIServiceProtocol {
 
             do {
                 request.httpBody = try JSONSerialization.data(withJSONObject: testRequestBody)
+                print("✅ Request body created successfully")
             } catch {
+                print("❌ Failed to create request body: \(error)")
                 observer.onNext(false)
                 observer.onCompleted()
                 return Disposables.create()
             }
 
+            print("📡 Sending test request to: \(url)")
+
             let task = self.session.dataTask(with: request) { data, response, error in
                 if let error = error {
-                    print("API Test Error: \(error.localizedDescription)")
+                    print("❌ API Test Error: \(error.localizedDescription)")
                     observer.onNext(false)
                     observer.onCompleted()
                     return
                 }
 
                 guard let httpResponse = response as? HTTPURLResponse else {
+                    print("❌ No HTTP response")
                     observer.onNext(false)
                     observer.onCompleted()
                     return
                 }
 
+                print("📥 Response Status Code: \(httpResponse.statusCode)")
+
+                if let data = data, let responseString = String(data: data, encoding: .utf8) {
+                    print("📄 Response Body: \(responseString.prefix(200))...")
+                }
+
                 // Consider 200-299 as success
                 let isSuccess = (200...299).contains(httpResponse.statusCode)
+                print(isSuccess ? "✅ API Test SUCCESS" : "❌ API Test FAILED")
                 observer.onNext(isSuccess)
                 observer.onCompleted()
             }

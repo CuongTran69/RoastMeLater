@@ -5,32 +5,33 @@ import RxSwift
 class APITestHelper {
     static let shared = APITestHelper()
     private let session = URLSession.shared
-    
+
     private init() {}
-    
-    /// Test API connection với model cố định deepseek:deepseek-v3
+
+    /// Test API connection với model do người dùng chọn
     /// - Parameters:
     ///   - apiKey: API key
     ///   - baseURL: Base URL của API
-    ///   - modelName: Tên model (luôn sử dụng "deepseek:deepseek-v3")
+    ///   - modelName: Tên model (sử dụng model do người dùng nhập)
     /// - Returns: Observable<Bool> indicating success/failure
     func testAPIConnection(apiKey: String, baseURL: String, modelName: String) -> Observable<Bool> {
         return Observable.create { observer in
-            let effectiveModelName = "deepseek:deepseek-v3" // Cố định model
-            
+            // Sử dụng model do người dùng nhập, nếu trống thì dùng default
+            let effectiveModelName = modelName.isEmpty ? Constants.API.defaultModel : modelName
+
             guard let url = URL(string: baseURL) else {
                 print("❌ Invalid base URL: \(baseURL)")
                 observer.onNext(false)
                 observer.onCompleted()
                 return Disposables.create()
             }
-            
+
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.timeoutInterval = 30.0
-            
+
             let requestBody: [String: Any] = [
                 "model": effectiveModelName,
                 "messages": [
@@ -38,7 +39,7 @@ class APITestHelper {
                 ],
                 "max_tokens": 10
             ]
-            
+
             do {
                 request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
             } catch {
@@ -47,11 +48,11 @@ class APITestHelper {
                 observer.onCompleted()
                 return Disposables.create()
             }
-            
+
             print("🔄 Testing API...")
             print("URL: \(baseURL)")
             print("Model: \(effectiveModelName)")
-            
+
             let task = self.session.dataTask(with: request) { data, response, error in
                 if let error = error {
                     print("❌ API Error: \(error.localizedDescription)")
@@ -59,16 +60,16 @@ class APITestHelper {
                     observer.onCompleted()
                     return
                 }
-                
+
                 guard let httpResponse = response as? HTTPURLResponse else {
                     print("❌ Invalid response type")
                     observer.onNext(false)
                     observer.onCompleted()
                     return
                 }
-                
+
                 print("📡 HTTP Status: \(httpResponse.statusCode)")
-                
+
                 if (200...299).contains(httpResponse.statusCode) {
                     if let data = data,
                        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -91,12 +92,12 @@ class APITestHelper {
                     }
                     observer.onNext(false)
                 }
-                
+
                 observer.onCompleted()
             }
-            
+
             task.resume()
-            
+
             return Disposables.create {
                 task.cancel()
             }

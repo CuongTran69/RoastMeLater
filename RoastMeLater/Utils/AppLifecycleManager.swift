@@ -5,19 +5,26 @@ import RxSwift
 
 class AppLifecycleManager: ObservableObject {
     static let shared = AppLifecycleManager()
-    
+
     private let disposeBag = DisposeBag()
     private let notificationManager: NotificationManager
     private let storageService: StorageServiceProtocol
-    
+    private let streakService: StreakServiceProtocol
+
     @Published var appState: AppState = .active
     @Published var backgroundTime: Date?
-    
+    @Published var currentStreak: UserStreak = UserStreak()
+    @Published var streakStatus: StreakStatus = .newUser
+
     private init() {
         self.notificationManager = NotificationManager()
-        self.storageService = StorageService()
-        
+        self.storageService = StorageService.shared
+        self.streakService = StreakService(storageService: StorageService.shared)
+
         setupLifecycleObservers()
+
+        // Initialize streak data
+        updateStreakData()
     }
     
     private func setupLifecycleObservers() {
@@ -70,15 +77,18 @@ class AppLifecycleManager: ObservableObject {
     
     @objc private func appDidBecomeActive() {
         appState = .active
-        
+
+        // Check and update streak when app becomes active
+        updateStreakData()
+
         // Check if we need to reschedule notifications
         notificationManager.rescheduleNotificationsIfNeeded()
-        
+
         // Handle returning from background
         if let backgroundTime = backgroundTime {
             handleReturnFromBackground(backgroundTime: backgroundTime)
         }
-        
+
         backgroundTime = nil
     }
     
@@ -151,7 +161,54 @@ class AppLifecycleManager: ObservableObject {
         }
         return appStateData
     }
-    
+
+    // MARK: - Streak Management
+
+    /// Updates the streak data by checking and updating the streak status
+    private func updateStreakData() {
+        streakStatus = streakService.checkAndUpdateStreak()
+        currentStreak = streakService.currentStreak
+
+        // Post notification if streak status changed significantly
+        if case .expiringSoon(let hours) = streakStatus, hours <= 2 {
+            postStreakExpiringNotification(hoursRemaining: hours)
+        }
+    }
+
+    /// Manually refresh streak data (can be called from views)
+    func refreshStreakData() {
+        streakStatus = streakService.getStreakStatus()
+        currentStreak = streakService.currentStreak
+    }
+
+    /// Attempts to use a streak freeze
+    /// - Returns: true if freeze was successfully used
+    func useStreakFreeze() -> Bool {
+        let success = streakService.useStreakFreeze()
+        if success {
+            refreshStreakData()
+        }
+        return success
+    }
+
+    /// Gets all streak milestones with their unlock status
+    func getStreakMilestones() -> [StreakMilestone] {
+        return streakService.getMilestones()
+    }
+
+    /// Gets hours remaining until streak expires
+    func getHoursUntilStreakExpiry() -> Int? {
+        return streakService.getHoursUntilExpiry()
+    }
+
+    private func postStreakExpiringNotification(hoursRemaining: Int) {
+        NotificationCenter.default.post(
+            name: .streakExpiringSoon,
+            object: nil,
+            userInfo: ["hoursRemaining": hoursRemaining]
+        )
+    }
+
     deinit {
         NotificationCenter.default.removeObserver(self)
     }
@@ -172,4 +229,5 @@ struct AppStateData: Codable {
 extension Notification.Name {
     static let navigateToRoastGenerator = Notification.Name("navigateToRoastGenerator")
     static let generateWelcomeBackRoast = Notification.Name("generateWelcomeBackRoast")
+    static let streakExpiringSoon = Notification.Name("streakExpiringSoon")
 }

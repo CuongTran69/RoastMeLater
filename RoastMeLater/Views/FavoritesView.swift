@@ -32,11 +32,11 @@ struct FavoritesView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         Button(action: shareAllFavorites) {
-                            Label("Chia sẻ tất cả", systemImage: "square.and.arrow.up")
+                            Label(Strings.Favorites.shareAll.localized(localizationManager.currentLanguage), systemImage: "square.and.arrow.up")
                         }
-                        
+
                         Button(action: viewModel.clearAllFavorites) {
-                            Label("Xóa tất cả", systemImage: "heart.slash")
+                            Label(Strings.Favorites.clearAll.localized(localizationManager.currentLanguage), systemImage: "heart.slash")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -52,65 +52,72 @@ struct FavoritesView: View {
         }
         .dismissKeyboard()
     }
-    
+
     private var filteredFavorites: [Roast] {
         if searchText.isEmpty {
             return viewModel.favoriteRoasts
         } else {
             return viewModel.favoriteRoasts.filter { roast in
                 roast.content.localizedCaseInsensitiveContains(searchText) ||
-                roast.category.displayName.localizedCaseInsensitiveContains(searchText)
+                localizationManager.categoryName(roast.category).localizedCaseInsensitiveContains(searchText)
             }
         }
     }
-    
+
     private func shareRoast(_ roast: Roast) {
+        let spiceLevelText = Strings.Favorites.spiceLevel.localized(localizationManager.currentLanguage)
+        let createdByText = Strings.Favorites.createdByApp.localized(localizationManager.currentLanguage)
+
         shareText = """
-        🔥 RoastMe - \(roast.category.displayName)
-        
+        🔥 RoastMe - \(localizationManager.categoryName(roast.category))
+
         \(roast.content)
-        
-        Mức độ cay: \(String(repeating: "🌶️", count: roast.spiceLevel))
-        
-        Được tạo bởi RoastMe App
+
+        \(spiceLevelText): \(String(repeating: "🌶️", count: roast.spiceLevel))
+
+        \(createdByText)
         """
         showingShareSheet = true
     }
-    
+
     private func shareAllFavorites() {
         let allFavorites = viewModel.favoriteRoasts.map { roast in
-            "🔥 \(roast.category.displayName): \(roast.content)"
+            "🔥 \(localizationManager.categoryName(roast.category)): \(roast.content)"
         }.joined(separator: "\n\n")
-        
+
+        let collectionText = Strings.Favorites.myCollection.localized(localizationManager.currentLanguage)
+        let createdByText = Strings.Favorites.createdByApp.localized(localizationManager.currentLanguage)
+
         shareText = """
-        🔥 Bộ sưu tập RoastMe yêu thích của tôi:
-        
+        🔥 \(collectionText)
+
         \(allFavorites)
-        
-        Được tạo bởi RoastMe App
+
+        \(createdByText)
         """
         showingShareSheet = true
     }
 }
 
 struct FavoriteRoastRowView: View {
+    @EnvironmentObject var localizationManager: LocalizationManager
     let roast: Roast
     let onFavoriteToggle: () -> Void
     let onShare: () -> Void
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: roast.category.icon)
                     .foregroundColor(.orange)
                     .frame(width: 20)
-                
-                Text(roast.category.displayName)
+
+                Text(localizationManager.categoryName(roast.category))
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 Spacer()
-                
+
                 HStack(spacing: 2) {
                     ForEach(1...roast.spiceLevel, id: \.self) { _ in
                         Image(systemName: "flame.fill")
@@ -119,24 +126,24 @@ struct FavoriteRoastRowView: View {
                     }
                 }
             }
-            
+
             Text(roast.content)
                 .font(.body)
                 .lineLimit(nil)
                 .multilineTextAlignment(.leading)
-            
+
             HStack {
                 Text(roast.createdAt, style: .date)
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 Spacer()
-                
+
                 Button(action: onShare) {
                     Image(systemName: "square.and.arrow.up")
                         .foregroundColor(.blue)
                 }
-                
+
                 Button(action: onFavoriteToggle) {
                     Image(systemName: "heart.fill")
                         .foregroundColor(.red)
@@ -146,12 +153,12 @@ struct FavoriteRoastRowView: View {
         .padding(.vertical, 8)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(action: onFavoriteToggle) {
-                Label("Bỏ thích", systemImage: "heart.slash")
+                Label(Strings.Favorites.removeFromFavorites.localized(localizationManager.currentLanguage), systemImage: "heart.slash")
             }
             .tint(.red)
-            
+
             Button(action: onShare) {
-                Label("Chia sẻ", systemImage: "square.and.arrow.up")
+                Label(Strings.Common.share.localized(localizationManager.currentLanguage), systemImage: "square.and.arrow.up")
             }
             .tint(.blue)
         }
@@ -159,6 +166,7 @@ struct FavoriteRoastRowView: View {
 }
 
 struct EmptyFavoritesView: View {
+    @EnvironmentObject var localizationManager: LocalizationManager
     let onNavigateToRoastGenerator: () -> Void
 
     var body: some View {
@@ -166,22 +174,21 @@ struct EmptyFavoritesView: View {
             Image(systemName: "heart.slash")
                 .font(.system(size: 60))
                 .foregroundColor(.gray.opacity(0.5))
-            
-            Text("Chưa có roast yêu thích")
-                .font(.title2)
-                .fontWeight(.semibold)
+
+            Text(Strings.Favorites.emptyTitle.localized(localizationManager.currentLanguage))
+                .font(.title2.weight(.semibold))
                 .foregroundColor(.secondary)
-            
-            Text("Nhấn vào biểu tượng trái tim ở các câu roast để thêm vào danh sách yêu thích!")
+
+            Text(Strings.Favorites.emptyMessage.localized(localizationManager.currentLanguage))
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
-            
+
             Button(action: onNavigateToRoastGenerator) {
                 HStack {
                     Image(systemName: "sparkles")
-                    Text("Tạo Roast Mới")
+                    Text(Strings.Favorites.createNewRoast.localized(localizationManager.currentLanguage))
                 }
                 .font(.headline)
                 .foregroundColor(.white)

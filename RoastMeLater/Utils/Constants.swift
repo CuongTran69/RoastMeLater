@@ -22,7 +22,7 @@ struct Constants {
 
         // Custom LLM configuration
         static let defaultBaseURL = ""  // Will be set from user preferences
-        static let fixedModel = "deepseek:deepseek-v3"  // Fixed model - không thay đổi
+        static let defaultModel = "gemini:gemini-2.5-pro"  // Default model - có thể thay đổi
 
         // Request configuration
         static let requestTimeout: TimeInterval = 30.0
@@ -86,6 +86,7 @@ struct Constants {
         static let maxRoastLength = 280
         static let minRoastLength = 10
         static let maxHistoryItems = 100
+        static let maxHistoryItemsBulk = 1000  // For bulk operations
         static let maxFavoriteItems = 50
         static let maxSpiceLevel = 5
         static let minSpiceLevel = 1
@@ -216,4 +217,5 @@ extension Notification.Name {
     static let settingsDidChange = Notification.Name(Constants.NotificationNames.settingsDidChange)
     static let favoriteDidChange = Notification.Name(Constants.NotificationNames.favoriteDidChange)
     static let roastDataDidChange = Notification.Name(Constants.NotificationNames.roastDataDidChange)
+    static let languageDidChange = Notification.Name("languageDidChange")
 }

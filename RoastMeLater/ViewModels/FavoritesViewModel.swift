@@ -53,7 +53,7 @@ class FavoritesViewModel: ObservableObject {
     }
     
     // MARK: - Initialization
-    init(storageService: StorageServiceProtocol = StorageService()) {
+    init(storageService: StorageServiceProtocol = StorageService.shared) {
         self.storageService = storageService
         setupBindings()
         loadFavorites()

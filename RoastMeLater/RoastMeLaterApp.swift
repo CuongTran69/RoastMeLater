@@ -12,6 +12,7 @@ import UserNotifications
 struct RoastMeApp: App {
     @StateObject private var notificationManager = NotificationManager()
     @StateObject private var lifecycleManager = AppLifecycleManager.shared
+    @ObservedObject private var localizationManager = LocalizationManager.shared
     @State private var showSplash = true
 
     init() {
@@ -35,6 +36,7 @@ struct RoastMeApp: App {
                 ContentView()
                     .environmentObject(notificationManager)
                     .environmentObject(lifecycleManager)
+                    .environmentObject(localizationManager)
                     .onAppear {
                         // Check and request notification permission if needed
                         notificationManager.requestNotificationPermission()

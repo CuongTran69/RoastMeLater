@@ -48,21 +48,30 @@ class SafetyFilter {
         let personalAttackPatterns = [
             "bạn là", "bạn thật", "bạn quá", "bạn rất"
         ]
-        
+
         for pattern in personalAttackPatterns {
             if content.contains(pattern) {
                 // Check if it's followed by negative words
                 let words = content.components(separatedBy: " ")
-                if let index = words.firstIndex(where: { $0.contains(pattern) }),
-                   index + 1 < words.count {
-                    let nextWord = words[index + 1].lowercased()
-                    if inappropriateWords.contains(nextWord) {
-                        return true
-                    }
+
+                // Find the index of the word containing the pattern
+                guard let index = words.firstIndex(where: { $0.contains(pattern) }) else {
+                    continue
+                }
+
+                // Safely check if there's a next word and if it's inappropriate
+                let nextIndex = index + 1
+                guard nextIndex < words.count else {
+                    continue
+                }
+
+                let nextWord = words[nextIndex].lowercased()
+                if inappropriateWords.contains(nextWord) {
+                    return true
                 }
             }
         }
-        
+
         return false
     }
     

@@ -4,6 +4,12 @@ struct APISetupView: View {
     @StateObject private var viewModel = SettingsViewModel()
     @Environment(\.dismiss) private var dismiss
     @State private var showingSuccess = false
+
+    // Computed property to check if form is valid
+    private var isFormValid: Bool {
+        !viewModel.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !viewModel.baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
     
     var body: some View {
         NavigationView {
@@ -15,8 +21,7 @@ struct APISetupView: View {
                         .foregroundColor(.orange)
                     
                     Text("Cấu Hình API")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
+                        .font(.largeTitle.weight(.bold))
                     
                     Text("Để tạo roast, bạn cần cung cấp API key từ dịch vụ AI tương thích OpenAI")
                         .font(.body)
@@ -32,8 +37,7 @@ struct APISetupView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("API Key")
-                                .font(.headline)
-                                .fontWeight(.semibold)
+                                .font(.headline.weight(.semibold))
                             Text("*")
                                 .foregroundColor(.red)
                         }
@@ -41,6 +45,9 @@ struct APISetupView: View {
                         SecureField("sk-xxxxxxxxxxxxxxxx", text: $viewModel.apiKey)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .font(.system(.body, design: .monospaced))
+                            .onChange(of: viewModel.apiKey) { newValue in
+                                print("📝 API Key changed: \(newValue.isEmpty ? "EMPTY" : "HAS_VALUE (\(newValue.count) chars)")")
+                            }
                         
                         Text("API key từ OpenAI, Anthropic, hoặc dịch vụ tương thích")
                             .font(.caption)
@@ -50,8 +57,7 @@ struct APISetupView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Base URL")
-                                .font(.headline)
-                                .fontWeight(.semibold)
+                                .font(.headline.weight(.semibold))
                             Text("*")
                                 .foregroundColor(.red)
                         }
@@ -61,6 +67,9 @@ struct APISetupView: View {
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
                             .font(.system(.body, design: .monospaced))
+                            .onChange(of: viewModel.baseURL) { newValue in
+                                print("📝 Base URL changed: \(newValue.isEmpty ? "EMPTY" : newValue)")
+                            }
                         
                         Text("Endpoint API của dịch vụ AI")
                             .font(.caption)
@@ -69,18 +78,18 @@ struct APISetupView: View {
                     
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Model")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                        
-                        Text("deepseek:deepseek-v3")
+                            .font(.headline.weight(.semibold))
+
+                        TextField("gemini:gemini-2.5-pro, gpt-4, claude-3-opus...", text: $viewModel.modelName)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
                             .font(.system(.body, design: .monospaced))
-                            .foregroundColor(.primary)
-                            .padding()
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(8)
-                        
-                        Text("Model được sử dụng để tạo roast")
+                            .onChange(of: viewModel.modelName) { newValue in
+                                print("📝 Model changed: \(newValue.isEmpty ? "EMPTY" : newValue)")
+                            }
+
+                        Text("Model được sử dụng để tạo roast (mặc định: gemini:gemini-2.5-pro)")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -93,11 +102,22 @@ struct APISetupView: View {
                 VStack(spacing: 12) {
                     // Test button
                     Button(action: {
+                        print("🔍 Test button tapped")
+                        print("  API Key: \(viewModel.apiKey.isEmpty ? "EMPTY" : "HAS_VALUE")")
+                        print("  Base URL: \(viewModel.baseURL.isEmpty ? "EMPTY" : viewModel.baseURL)")
+                        print("  Model: \(viewModel.modelName)")
+                        print("  Is Valid: \(isFormValid)")
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                        impactFeedback.impactOccurred()
                         viewModel.testAPIConnection()
                     }) {
                         HStack {
-                            if viewModel.apiTestResult == nil {
-                                Image(systemName: "checkmark.circle")
+                            if viewModel.isTestingConnection {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.8)
+                            } else if viewModel.apiTestResult == nil {
+                                Image(systemName: "antenna.radiowaves.left.and.right")
                             } else if viewModel.apiTestResult == true {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundColor(.green)
@@ -105,22 +125,23 @@ struct APISetupView: View {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundColor(.red)
                             }
-                            Text("Test Kết Nối")
+                            Text(viewModel.isTestingConnection ? "Đang kiểm tra..." : "Test Kết Nối")
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(viewModel.apiKey.isEmpty || viewModel.baseURL.isEmpty ? Color.gray.opacity(0.3) : Color.blue)
+                        .background(isFormValid && !viewModel.isTestingConnection ? Color.blue : Color.gray.opacity(0.3))
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }
-                    .disabled(viewModel.apiKey.isEmpty || viewModel.baseURL.isEmpty)
-                    
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(!isFormValid || viewModel.isTestingConnection)
+
                     // Test result
                     if let testResult = viewModel.apiTestResult {
                         HStack {
                             Image(systemName: testResult ? "checkmark.circle.fill" : "xmark.circle.fill")
                                 .foregroundColor(testResult ? .green : .red)
-                            Text(testResult ? "✅ Kết nối thành công!" : "❌ Không thể kết nối. Vui lòng kiểm tra lại.")
+                            Text(testResult ? "✅ Kết nối thành công! Đã lưu cấu hình." : "❌ Không thể kết nối. Vui lòng kiểm tra lại.")
                                 .font(.subheadline)
                                 .foregroundColor(testResult ? .green : .red)
                             Spacer()
@@ -129,9 +150,14 @@ struct APISetupView: View {
                     
                     // Save button
                     Button(action: {
+                        print("💾 Save button tapped")
+                        print("  API Key: \(viewModel.apiKey.isEmpty ? "EMPTY" : "HAS_VALUE")")
+                        print("  Base URL: \(viewModel.baseURL.isEmpty ? "EMPTY" : viewModel.baseURL)")
+                        print("  Is Valid: \(isFormValid)")
+
                         viewModel.updateAPIConfiguration()
                         showingSuccess = true
-                        
+
                         // Auto dismiss after 1.5 seconds
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                             dismiss()
@@ -144,8 +170,14 @@ struct APISetupView: View {
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(
+                            isFormValid ?
                             LinearGradient(
                                 colors: [.orange, .red],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ) :
+                            LinearGradient(
+                                colors: [Color.gray.opacity(0.3), Color.gray.opacity(0.3)],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -153,7 +185,8 @@ struct APISetupView: View {
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }
-                    .disabled(viewModel.apiKey.isEmpty || viewModel.baseURL.isEmpty)
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(!isFormValid)
                 }
                 .padding(.horizontal)
                 .padding(.bottom)

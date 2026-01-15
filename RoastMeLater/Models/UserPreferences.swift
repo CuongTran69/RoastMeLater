@@ -27,20 +27,18 @@ struct UserPreferences: Codable {
 struct APIConfiguration: Codable {
     var apiKey: String
     var baseURL: String
-
-    // Model cố định - không cần lưu trong preferences
-    var modelName: String {
-        return Constants.API.fixedModel
-    }
+    var modelName: String
 
     init() {
         self.apiKey = ""
         self.baseURL = ""
+        self.modelName = Constants.API.defaultModel
     }
 
-    init(apiKey: String, baseURL: String) {
+    init(apiKey: String, baseURL: String, modelName: String = Constants.API.defaultModel) {
         self.apiKey = apiKey
         self.baseURL = baseURL
+        self.modelName = modelName
     }
 }
 

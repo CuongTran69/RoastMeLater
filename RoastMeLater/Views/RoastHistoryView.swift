@@ -1,12 +1,22 @@
 import SwiftUI
+import Combine
 
 struct RoastHistoryView: View {
     @StateObject private var viewModel = RoastHistoryViewModel()
     @EnvironmentObject var localizationManager: LocalizationManager
     @State private var searchText = ""
+    @State private var debouncedSearchText = ""
     @State private var selectedCategory: RoastCategory? = nil
     @State private var showingFilterSheet = false
+    @State private var displayedRoastsCount = 20 // Initial load count
+    @State private var isPrefetching = false
     let onNavigateToRoastGenerator: () -> Void
+
+    private let loadMoreThreshold = 5 // Load more when 5 items from bottom
+    private let prefetchThreshold = 10 // Start prefetching when 10 items from bottom
+
+    // Debounce timer
+    @State private var searchDebounceTimer: AnyCancellable?
     
     var body: some View {
         NavigationView {
@@ -15,17 +25,41 @@ struct RoastHistoryView: View {
                     EmptyHistoryView(onNavigateToRoastGenerator: onNavigateToRoastGenerator)
                 } else {
                     List {
-                        ForEach(filteredRoasts) { roast in
+                        ForEach(Array(displayedRoasts.enumerated()), id: \.element.id) { index, roast in
                             RoastHistoryRowView(roast: roast) {
                                 viewModel.toggleFavorite(roast: roast)
                             } onDelete: {
                                 viewModel.deleteRoast(roast: roast)
                             }
+                            .onAppear {
+                                // Background prefetch when approaching end
+                                if shouldPrefetch(currentIndex: index) {
+                                    prefetchNextPage()
+                                }
+
+                                // Load more when approaching end
+                                if shouldLoadMore(currentIndex: index) {
+                                    loadMoreRoasts()
+                                }
+                            }
                         }
                         .onDelete(perform: deleteRoasts)
+
+                        // Loading indicator at bottom
+                        if hasMoreRoasts {
+                            HStack {
+                                Spacer()
+                                ProgressView()
+                                    .padding()
+                                Spacer()
+                            }
+                        }
                     }
                     .listStyle(PlainListStyle())
                     .searchable(text: $searchText, prompt: localizationManager.searchRoasts)
+                    .onChange(of: searchText) { newValue in
+                        debounceSearch(newValue)
+                    }
                 }
             }
             .navigationTitle(localizationManager.tabHistory)
@@ -33,11 +67,11 @@ struct RoastHistoryView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         Button(action: { showingFilterSheet = true }) {
-                            Label("Lọc theo danh mục", systemImage: "line.3.horizontal.decrease.circle")
+                            Label(Strings.History.filterByCategory.localized(localizationManager.currentLanguage), systemImage: "line.3.horizontal.decrease.circle")
                         }
-                        
+
                         Button(action: viewModel.clearAllHistory) {
-                            Label("Xóa tất cả", systemImage: "trash")
+                            Label(Strings.History.clearAll.localized(localizationManager.currentLanguage), systemImage: "trash")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -56,21 +90,78 @@ struct RoastHistoryView: View {
     
     private var filteredRoasts: [Roast] {
         var roasts = viewModel.roasts
-        
-        // Filter by search text
-        if !searchText.isEmpty {
+
+        // Filter by debounced search text (not immediate searchText)
+        if !debouncedSearchText.isEmpty {
             roasts = roasts.filter { roast in
-                roast.content.localizedCaseInsensitiveContains(searchText) ||
-                roast.category.displayName.localizedCaseInsensitiveContains(searchText)
+                roast.content.localizedCaseInsensitiveContains(debouncedSearchText) ||
+                localizationManager.categoryName(roast.category).localizedCaseInsensitiveContains(debouncedSearchText)
             }
         }
-        
+
         // Filter by category
         if let selectedCategory = selectedCategory {
             roasts = roasts.filter { $0.category == selectedCategory }
         }
-        
+
         return roasts
+    }
+
+    private func debounceSearch(_ text: String) {
+        // Cancel previous timer
+        searchDebounceTimer?.cancel()
+
+        // Create new timer that fires after 300ms
+        searchDebounceTimer = Just(text)
+            .delay(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .sink { [self] debouncedText in
+                debouncedSearchText = debouncedText
+                // Reset displayed count when search changes
+                displayedRoastsCount = 20
+            }
+    }
+
+    private var displayedRoasts: [Roast] {
+        let filtered = filteredRoasts
+        // Only display up to displayedRoastsCount items for performance
+        return Array(filtered.prefix(displayedRoastsCount))
+    }
+
+    private var hasMoreRoasts: Bool {
+        return filteredRoasts.count > displayedRoastsCount
+    }
+
+    private func shouldLoadMore(currentIndex: Int) -> Bool {
+        return currentIndex >= displayedRoastsCount - loadMoreThreshold && hasMoreRoasts
+    }
+
+    private func shouldPrefetch(currentIndex: Int) -> Bool {
+        return currentIndex >= displayedRoastsCount - prefetchThreshold && hasMoreRoasts && !isPrefetching
+    }
+
+    private func prefetchNextPage() {
+        guard !isPrefetching else { return }
+
+        isPrefetching = true
+
+        // Simulate background prefetch with slight delay
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.1) { [self] in
+            // Prefetch logic - prepare next batch
+            let nextBatchStart = displayedRoastsCount
+            let nextBatchEnd = min(displayedRoastsCount + 20, filteredRoasts.count)
+
+            // Access the next batch to warm up cache
+            _ = Array(filteredRoasts[nextBatchStart..<nextBatchEnd])
+
+            DispatchQueue.main.async {
+                isPrefetching = false
+            }
+        }
+    }
+
+    private func loadMoreRoasts() {
+        let increment = 20
+        displayedRoastsCount = min(displayedRoastsCount + increment, filteredRoasts.count)
     }
     
     private func deleteRoasts(offsets: IndexSet) {
@@ -82,23 +173,24 @@ struct RoastHistoryView: View {
 }
 
 struct RoastHistoryRowView: View {
+    @EnvironmentObject var localizationManager: LocalizationManager
     let roast: Roast
     let onFavoriteToggle: () -> Void
     let onDelete: () -> Void
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: roast.category.icon)
                     .foregroundColor(.orange)
                     .frame(width: 20)
-                
-                Text(roast.category.displayName)
+
+                Text(localizationManager.categoryName(roast.category))
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 Spacer()
-                
+
                 HStack(spacing: 2) {
                     ForEach(1...roast.spiceLevel, id: \.self) { _ in
                         Image(systemName: "flame.fill")
@@ -106,20 +198,20 @@ struct RoastHistoryRowView: View {
                             .foregroundColor(.orange)
                     }
                 }
-                
+
                 Text(formatTimeOnly(roast.createdAt))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            
+
             Text(roast.content)
                 .font(.body)
                 .lineLimit(3)
                 .multilineTextAlignment(.leading)
-            
+
             HStack {
                 Spacer()
-                
+
                 Button(action: {
                     let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                     impactFeedback.impactOccurred()
@@ -146,13 +238,15 @@ struct RoastHistoryRowView: View {
         .padding(.vertical, 4)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(action: onDelete) {
-                Label("Xóa", systemImage: "trash")
+                Label(Strings.Common.delete.localized(localizationManager.currentLanguage), systemImage: "trash")
             }
             .tint(.red)
         }
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             Button(action: onFavoriteToggle) {
-                Label(roast.isFavorite ? "Bỏ thích" : "Yêu thích",
+                Label(roast.isFavorite
+                      ? Strings.Favorites.removeFromFavorites.localized(localizationManager.currentLanguage)
+                      : Strings.TabBar.favorites.localized(localizationManager.currentLanguage),
                       systemImage: roast.isFavorite ? "heart.slash" : "heart")
             }
             .tint(.orange)
@@ -168,6 +262,7 @@ struct RoastHistoryRowView: View {
 }
 
 struct EmptyHistoryView: View {
+    @EnvironmentObject var localizationManager: LocalizationManager
     let onNavigateToRoastGenerator: () -> Void
 
     var body: some View {
@@ -175,21 +270,20 @@ struct EmptyHistoryView: View {
             Image(systemName: "clock.badge.questionmark")
                 .font(.system(size: 60))
                 .foregroundColor(.gray.opacity(0.5))
-            
-            Text("Chưa có lịch sử roast")
-                .font(.title2)
-                .fontWeight(.semibold)
+
+            Text(Strings.History.emptyTitle.localized(localizationManager.currentLanguage))
+                .font(.title2.weight(.semibold))
                 .foregroundColor(.secondary)
-            
-            Text("Hãy tạo câu roast đầu tiên của bạn!")
+
+            Text(Strings.History.emptyMessage.localized(localizationManager.currentLanguage))
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-            
+
             Button(action: onNavigateToRoastGenerator) {
                 HStack {
                     Image(systemName: "sparkles")
-                    Text("Tạo Roast Mới")
+                    Text(Strings.History.createNewRoast.localized(localizationManager.currentLanguage))
                 }
                 .font(.headline)
                 .foregroundColor(.white)
@@ -209,19 +303,20 @@ struct EmptyHistoryView: View {
 }
 
 struct FilterSheetView: View {
+    @EnvironmentObject var localizationManager: LocalizationManager
     @Binding var selectedCategory: RoastCategory?
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         NavigationView {
             List {
-                Section("Danh mục") {
+                Section(Strings.RoastGenerator.category.localized(localizationManager.currentLanguage)) {
                     Button(action: {
                         selectedCategory = nil
                         dismiss()
                     }) {
                         HStack {
-                            Text("Tất cả")
+                            Text(Strings.Favorites.allCategories.localized(localizationManager.currentLanguage))
                             Spacer()
                             if selectedCategory == nil {
                                 Image(systemName: "checkmark")
@@ -230,7 +325,7 @@ struct FilterSheetView: View {
                         }
                     }
                     .foregroundColor(.primary)
-                    
+
                     ForEach(RoastCategory.allCases, id: \.self) { category in
                         Button(action: {
                             selectedCategory = category
@@ -240,11 +335,11 @@ struct FilterSheetView: View {
                                 Image(systemName: category.icon)
                                     .foregroundColor(.orange)
                                     .frame(width: 20)
-                                
-                                Text(category.displayName)
-                                
+
+                                Text(localizationManager.categoryName(category))
+
                                 Spacer()
-                                
+
                                 if selectedCategory == category {
                                     Image(systemName: "checkmark")
                                         .foregroundColor(.orange)
@@ -255,11 +350,11 @@ struct FilterSheetView: View {
                     }
                 }
             }
-            .navigationTitle("Lọc Lịch Sử")
+            .navigationTitle(Strings.History.filterHistory.localized(localizationManager.currentLanguage))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Xong") {
+                    Button(Strings.Common.done.localized(localizationManager.currentLanguage)) {
                         dismiss()
                     }
                 }

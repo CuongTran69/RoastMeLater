@@ -10,6 +10,8 @@ protocol StorageServiceProtocol {
     func deleteRoast(roastId: UUID)
     func saveUserPreferences(_ preferences: UserPreferences)
     func getUserPreferences() -> UserPreferences
+    func saveUserStreak(_ streak: UserStreak)
+    func getUserStreak() -> UserStreak?
     func clearAllData()
 
     // Bulk operations for import/export
@@ -63,45 +65,63 @@ struct DataBackup {
 }
 
 class StorageService: StorageServiceProtocol {
+    // MARK: - Singleton
+    static let shared = StorageService()
+
     private let userDefaults = UserDefaults.standard
     private let roastHistoryKey = "roast_history"
     private let userPreferencesKey = "user_preferences"
-    
+    private let userStreakKey = "user_streak"
+
     private let roastHistorySubject = BehaviorSubject<[Roast]>(value: [])
     private let favoritesSubject = BehaviorSubject<[Roast]>(value: [])
-    
+
+    // MARK: - In-Memory Cache
+    private var cachedRoastHistory: [Roast]?
+    private var cachedPreferences: UserPreferences?
+    private var cachedUserStreak: UserStreak?
+    private let cacheQueue = DispatchQueue(label: "com.roastmelater.storage.cache", attributes: .concurrent)
+
     var roastHistory: Observable<[Roast]> {
         return roastHistorySubject.asObservable()
     }
-    
+
     var favorites: Observable<[Roast]> {
         return favoritesSubject.asObservable()
     }
-    
+
     init() {
         loadInitialData()
     }
-    
+
     private func loadInitialData() {
         let history = getRoastHistory()
         roastHistorySubject.onNext(history)
-        
+
         let favorites = getFavoriteRoasts()
         favoritesSubject.onNext(favorites)
+    }
+
+    private func invalidateCache() {
+        cacheQueue.async(flags: .barrier) { [weak self] in
+            self?.cachedRoastHistory = nil
+            self?.cachedPreferences = nil
+            self?.cachedUserStreak = nil
+        }
     }
     
     func saveRoast(_ roast: Roast) {
         var history = getRoastHistory()
         history.insert(roast, at: 0) // Add to beginning
-        
-        // Keep only last 100 roasts
-        if history.count > 100 {
-            history = Array(history.prefix(100))
+
+        // Keep only last N roasts (using constant)
+        if history.count > Constants.Content.maxHistoryItems {
+            history = Array(history.prefix(Constants.Content.maxHistoryItems))
         }
-        
+
         saveRoastHistory(history)
         roastHistorySubject.onNext(history)
-        
+
         // Update favorites if this roast is favorited
         if roast.isFavorite {
             let favorites = getFavoriteRoasts()
@@ -110,15 +130,36 @@ class StorageService: StorageServiceProtocol {
     }
     
     func getRoastHistory() -> [Roast] {
-        guard let data = userDefaults.data(forKey: roastHistoryKey),
-              let roasts = try? JSONDecoder().decode([Roast].self, from: data) else {
-            return []
+        return PerformanceMonitor.shared.measure(operation: "StorageService.getRoastHistory") {
+            // Check cache first
+            if let cached = cacheQueue.sync(execute: { cachedRoastHistory }) {
+                return cached
+            }
+
+            // Load from UserDefaults
+            guard let data = userDefaults.data(forKey: roastHistoryKey),
+                  let roasts = try? JSONDecoder().decode([Roast].self, from: data) else {
+                return []
+            }
+
+            // Update cache
+            cacheQueue.async(flags: .barrier) { [weak self] in
+                self?.cachedRoastHistory = roasts
+            }
+
+            return roasts
         }
-        return roasts
     }
-    
+
     func getFavoriteRoasts() -> [Roast] {
-        return getRoastHistory().filter { $0.isFavorite }
+        return PerformanceMonitor.shared.measure(operation: "StorageService.getFavoriteRoasts") {
+            // NOTE: This filters the entire history on every call.
+            // For better performance with large datasets, consider:
+            // 1. Caching favorites separately
+            // 2. Using a more efficient data structure (e.g., Dictionary)
+            // 3. Only invalidating cache when favorites change
+            return getRoastHistory().filter { $0.isFavorite }
+        }
     }
     
     func toggleFavorite(roastId: UUID) {
@@ -167,28 +208,130 @@ class StorageService: StorageServiceProtocol {
     }
     
     private func saveRoastHistory(_ roasts: [Roast]) {
-        if let data = try? JSONEncoder().encode(roasts) {
+        do {
+            let data = try JSONEncoder().encode(roasts)
             userDefaults.set(data, forKey: roastHistoryKey)
+
+            // Update cache
+            cacheQueue.async(flags: .barrier) { [weak self] in
+                self?.cachedRoastHistory = roasts
+            }
+        } catch {
+            print("❌ CRITICAL: Failed to encode roast history: \(error)")
+            print("   This is a data loss event - roasts were not saved!")
+            // TODO: Notify user about data save failure
+            ErrorHandler.shared.logError(error, context: "saveRoastHistory")
         }
     }
-    
+
     func saveUserPreferences(_ preferences: UserPreferences) {
-        if let data = try? JSONEncoder().encode(preferences) {
+        print("💾 StorageService.saveUserPreferences called")
+        print("  apiKey: \(preferences.apiConfiguration.apiKey.isEmpty ? "EMPTY" : "HAS_VALUE (\(preferences.apiConfiguration.apiKey.count) chars)")")
+        print("  baseURL: \(preferences.apiConfiguration.baseURL.isEmpty ? "EMPTY" : preferences.apiConfiguration.baseURL)")
+        print("  modelName: \(preferences.apiConfiguration.modelName.isEmpty ? "EMPTY" : preferences.apiConfiguration.modelName)")
+
+        do {
+            let data = try JSONEncoder().encode(preferences)
             userDefaults.set(data, forKey: userPreferencesKey)
+
+            // Force synchronize to ensure data is written immediately
+            userDefaults.synchronize()
+            print("✅ Preferences saved to UserDefaults and synchronized")
+
+            // Update cache synchronously to ensure immediate availability
+            cacheQueue.sync(flags: .barrier) { [weak self] in
+                self?.cachedPreferences = preferences
+                print("✅ Cache updated synchronously")
+            }
+        } catch {
+            print("❌ CRITICAL: Failed to encode preferences: \(error)")
+            print("   User preferences were not saved!")
+            ErrorHandler.shared.logError(error, context: "saveUserPreferences")
         }
     }
-    
+
     func getUserPreferences() -> UserPreferences {
+        // Check cache first
+        if let cached = cacheQueue.sync(execute: { cachedPreferences }) {
+            print("📦 getUserPreferences: Using cached preferences")
+            print("  apiKey: \(cached.apiConfiguration.apiKey.isEmpty ? "EMPTY" : "HAS_VALUE (\(cached.apiConfiguration.apiKey.count) chars)")")
+            print("  baseURL: \(cached.apiConfiguration.baseURL.isEmpty ? "EMPTY" : cached.apiConfiguration.baseURL)")
+            print("  modelName: \(cached.apiConfiguration.modelName.isEmpty ? "EMPTY" : cached.apiConfiguration.modelName)")
+            return cached
+        }
+
+        print("📂 getUserPreferences: Loading from UserDefaults")
+
+        // Load from UserDefaults
         guard let data = userDefaults.data(forKey: userPreferencesKey),
               let preferences = try? JSONDecoder().decode(UserPreferences.self, from: data) else {
-            return UserPreferences()
+            print("⚠️ No preferences found, using defaults")
+            let defaultPrefs = UserPreferences()
+
+            // Cache default preferences synchronously
+            cacheQueue.sync(flags: .barrier) { [weak self] in
+                self?.cachedPreferences = defaultPrefs
+            }
+
+            return defaultPrefs
         }
+
+        print("✅ Loaded preferences from UserDefaults")
+        print("  apiKey: \(preferences.apiConfiguration.apiKey.isEmpty ? "EMPTY" : "HAS_VALUE (\(preferences.apiConfiguration.apiKey.count) chars)")")
+        print("  baseURL: \(preferences.apiConfiguration.baseURL.isEmpty ? "EMPTY" : preferences.apiConfiguration.baseURL)")
+        print("  modelName: \(preferences.apiConfiguration.modelName.isEmpty ? "EMPTY" : preferences.apiConfiguration.modelName)")
+
+        // Update cache synchronously
+        cacheQueue.sync(flags: .barrier) { [weak self] in
+            self?.cachedPreferences = preferences
+        }
+
         return preferences
     }
-    
+
+    func saveUserStreak(_ streak: UserStreak) {
+        do {
+            let data = try JSONEncoder().encode(streak)
+            userDefaults.set(data, forKey: userStreakKey)
+            userDefaults.synchronize()
+
+            // Update cache
+            cacheQueue.async(flags: .barrier) { [weak self] in
+                self?.cachedUserStreak = streak
+            }
+        } catch {
+            print("❌ CRITICAL: Failed to encode user streak: \(error)")
+            ErrorHandler.shared.logError(error, context: "saveUserStreak")
+        }
+    }
+
+    func getUserStreak() -> UserStreak? {
+        // Check cache first
+        if let cached = cacheQueue.sync(execute: { cachedUserStreak }) {
+            return cached
+        }
+
+        // Load from UserDefaults
+        guard let data = userDefaults.data(forKey: userStreakKey),
+              let streak = try? JSONDecoder().decode(UserStreak.self, from: data) else {
+            return nil
+        }
+
+        // Update cache
+        cacheQueue.async(flags: .barrier) { [weak self] in
+            self?.cachedUserStreak = streak
+        }
+
+        return streak
+    }
+
     func clearAllData() {
         userDefaults.removeObject(forKey: roastHistoryKey)
         userDefaults.removeObject(forKey: userPreferencesKey)
+        userDefaults.removeObject(forKey: userStreakKey)
+
+        // Clear cache
+        invalidateCache()
 
         roastHistorySubject.onNext([])
         favoritesSubject.onNext([])
@@ -227,9 +370,9 @@ class StorageService: StorageServiceProtocol {
                 }
             }
 
-            // Maintain size limit
-            if currentHistory.count > 1000 { // Increased limit for bulk operations
-                currentHistory = Array(currentHistory.prefix(1000))
+            // Maintain size limit (using constant)
+            if currentHistory.count > Constants.Content.maxHistoryItemsBulk {
+                currentHistory = Array(currentHistory.prefix(Constants.Content.maxHistoryItemsBulk))
             }
 
             saveRoastHistory(currentHistory)
@@ -306,13 +449,27 @@ class StorageService: StorageServiceProtocol {
         let roastIds = roasts.map { $0.id }
         let uniqueIds = Set(roastIds)
 
-        // Check for duplicate IDs
+        // Check for duplicate IDs and identify them
         if roastIds.count != uniqueIds.count {
-            issues.append(DataIntegrityIssue(
-                type: .duplicateId,
-                description: "Tìm thấy ID trùng lặp trong lịch sử roast",
-                affectedItemId: nil
-            ))
+            // Find which IDs are duplicated
+            var seenIds = Set<UUID>()
+            var duplicateIds = Set<UUID>()
+
+            for id in roastIds {
+                if seenIds.contains(id) {
+                    duplicateIds.insert(id)
+                } else {
+                    seenIds.insert(id)
+                }
+            }
+
+            for duplicateId in duplicateIds {
+                issues.append(DataIntegrityIssue(
+                    type: .duplicateId,
+                    description: "ID trùng lặp được tìm thấy",
+                    affectedItemId: duplicateId.uuidString
+                ))
+            }
         }
 
         // Check for invalid data

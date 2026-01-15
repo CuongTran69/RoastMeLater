@@ -21,8 +21,7 @@ struct ErrorView: View {
             
             VStack(spacing: 8) {
                 Text(title)
-                    .font(.title2)
-                    .fontWeight(.bold)
+                    .font(.title2.weight(.bold))
                     .foregroundColor(.primary)
                 
                 Text(message)
@@ -123,8 +122,7 @@ struct EmptyStateView: View {
             
             VStack(spacing: 8) {
                 Text(title)
-                    .font(.title2)
-                    .fontWeight(.semibold)
+                    .font(.title2.weight(.semibold))
                     .foregroundColor(.secondary)
                 
                 Text(message)

@@ -11,7 +11,7 @@ class NotificationManager: ObservableObject {
     @Published var notificationPermissionGranted = false
     @Published var pendingNotificationsCount = 0
 
-    init(storageService: StorageServiceProtocol = StorageService(),
+    init(storageService: StorageServiceProtocol = StorageService.shared,
          aiService: AIServiceProtocol = AIService()) {
         self.storageService = storageService
         self.aiService = aiService

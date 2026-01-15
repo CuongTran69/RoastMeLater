@@ -1,286 +1,970 @@
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
     @EnvironmentObject var notificationManager: NotificationManager
     @EnvironmentObject var localizationManager: LocalizationManager
+    @ObservedObject private var appLifecycleManager = AppLifecycleManager.shared
     @State private var showingAbout = false
     @State private var showingNotificationTest = false
-    
+    @State private var showingStreakFreezeAlert = false
+    @State private var showingClearHistoryAlert = false
+    @State private var showingClearFavoritesAlert = false
+    @State private var showingResetSettingsAlert = false
+
+    // MARK: - UserDefaults Keys for Collapse States
+    private enum CollapseStateKeys {
+        static let notifications = "settings.section.notifications.expanded"
+        static let content = "settings.section.content.expanded"
+        static let apiConfig = "settings.section.apiConfig.expanded" // -1 = nil/auto, 0 = false, 1 = true
+        static let data = "settings.section.data.expanded"
+        static let appInfo = "settings.section.appInfo.expanded"
+        static let streak = "settings.section.streak.expanded"
+        static let statistics = "settings.section.statistics.expanded"
+    }
+
+    // MARK: - Collapsible Section States (with UserDefaults persistence)
+    @State private var isNotificationsExpanded: Bool = UserDefaults.standard.object(forKey: CollapseStateKeys.notifications) as? Bool ?? true
+    @State private var isContentExpanded: Bool = UserDefaults.standard.object(forKey: CollapseStateKeys.content) as? Bool ?? true
+    @State private var isAPIConfigExpanded: Bool? = {
+        let value = UserDefaults.standard.integer(forKey: CollapseStateKeys.apiConfig)
+        if UserDefaults.standard.object(forKey: CollapseStateKeys.apiConfig) == nil { return nil }
+        switch value {
+        case -1: return nil
+        case 0: return false
+        case 1: return true
+        default: return nil
+        }
+    }()
+    @State private var isDataExpanded: Bool = UserDefaults.standard.object(forKey: CollapseStateKeys.data) as? Bool ?? false
+    @State private var isAppInfoExpanded: Bool = UserDefaults.standard.object(forKey: CollapseStateKeys.appInfo) as? Bool ?? false
+    @State private var isStreakExpanded: Bool = UserDefaults.standard.object(forKey: CollapseStateKeys.streak) as? Bool ?? false
+    @State private var isStatisticsExpanded: Bool = UserDefaults.standard.object(forKey: CollapseStateKeys.statistics) as? Bool ?? false
+
+    // MARK: - Save Collapse State Functions
+    private func saveCollapseState(_ key: String, value: Bool) {
+        UserDefaults.standard.set(value, forKey: key)
+    }
+
+    private func saveAPIConfigCollapseState(_ value: Bool?) {
+        let intValue: Int
+        switch value {
+        case nil: intValue = -1
+        case false: intValue = 0
+        case true: intValue = 1
+        default: intValue = -1
+        }
+        UserDefaults.standard.set(intValue, forKey: CollapseStateKeys.apiConfig)
+    }
+
+    // Computed property to determine if API is configured
+    private var isAPIConfigured: Bool {
+        !viewModel.apiKey.isEmpty && !viewModel.baseURL.isEmpty
+    }
+
+    // Computed property to determine if section should be expanded
+    private var shouldExpandAPIConfig: Bool {
+        if let manualState = isAPIConfigExpanded {
+            return manualState
+        }
+        // Auto: expand if not configured
+        return !isAPIConfigured
+    }
+
+    // MARK: - Spice Level Color
+    private func spiceLevelColor(_ level: Int) -> Color {
+        switch level {
+        case 1: return .green
+        case 2: return .yellow
+        case 3: return .orange
+        case 4: return Color(red: 1.0, green: 0.4, blue: 0.2)
+        case 5: return .red
+        default: return .orange
+        }
+    }
+
+    private func spiceLevelEmoji(_ level: Int) -> String {
+        switch level {
+        case 1: return "😊"
+        case 2: return "🙂"
+        case 3: return "😏"
+        case 4: return "🔥"
+        case 5: return "💀"
+        default: return "😏"
+        }
+    }
+
     var body: some View {
         NavigationView {
-            Form {
-                // Notification Settings
-                Section(localizationManager.notifications) {
-                    Toggle(localizationManager.currentLanguage == "en" ? "Enable Notifications" : "Bật thông báo", isOn: $viewModel.notificationsEnabled)
-                        .onChange(of: viewModel.notificationsEnabled) { enabled in
-                            viewModel.updateNotificationsEnabled(enabled)
-                            if enabled {
-                                notificationManager.requestNotificationPermission()
-                            } else {
-                                notificationManager.cancelAllNotifications()
+            List {
+                // MARK: - Notification Settings (Collapsible)
+                Section {
+                    // Collapsible Header
+                    Button(action: {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            isNotificationsExpanded.toggle()
+                            saveCollapseState(CollapseStateKeys.notifications, value: isNotificationsExpanded)
+                        }
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "bell.badge.fill")
+                                .font(.title3)
+                                .foregroundColor(.orange)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(localizationManager.notifications)
+                                    .font(.body.weight(.semibold))
+                                    .foregroundColor(.primary)
+                                Text(viewModel.notificationsEnabled
+                                    ? (localizationManager.currentLanguage == "en" ? "Enabled" : "Đã bật")
+                                    : (localizationManager.currentLanguage == "en" ? "Disabled" : "Đã tắt"))
+                                    .font(.caption)
+                                    .foregroundColor(viewModel.notificationsEnabled ? .green : .secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.secondary)
+                                .rotationEffect(.degrees(isNotificationsExpanded ? 90 : 0))
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+
+                    // Expandable Content
+                    if isNotificationsExpanded {
+                        // Enable Notifications Toggle
+                        HStack(spacing: 14) {
+                            SettingsIconView(icon: "bell.fill", color: .orange)
+                            Toggle(Strings.Settings.Notifications.enableNotifications.localized(localizationManager.currentLanguage), isOn: $viewModel.notificationsEnabled)
+                                .onChange(of: viewModel.notificationsEnabled) { enabled in
+                                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                    impactFeedback.impactOccurred()
+                                    viewModel.updateNotificationsEnabled(enabled)
+                                    if enabled {
+                                        notificationManager.requestNotificationPermission()
+                                    } else {
+                                        notificationManager.cancelAllNotifications()
+                                    }
+                                }
+                        }
+
+                        if viewModel.notificationsEnabled {
+                            // Frequency Picker
+                            HStack(spacing: 14) {
+                                SettingsIconView(icon: "clock.fill", color: .blue)
+                                Picker(Strings.Settings.Notifications.frequency.localized(localizationManager.currentLanguage), selection: $viewModel.notificationFrequency) {
+                                    ForEach(NotificationFrequency.allCases, id: \.self) { frequency in
+                                        Text(frequency.displayName).tag(frequency)
+                                    }
+                                }
+                                .pickerStyle(MenuPickerStyle())
+                                .onChange(of: viewModel.notificationFrequency) { newValue in
+                                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                    impactFeedback.impactOccurred()
+                                    viewModel.updateNotificationFrequency(newValue)
+                                    notificationManager.scheduleHourlyNotifications()
+                                }
+                            }
+
+                            // Test Notification Button
+                            Button(action: {
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                                impactFeedback.impactOccurred()
+                                notificationManager.scheduleTestNotification()
+                                showingNotificationTest = true
+                            }) {
+                                HStack(spacing: 14) {
+                                    SettingsIconView(icon: "paperplane.fill", color: .green)
+                                    Text(Strings.Settings.Notifications.testNotification.localized(localizationManager.currentLanguage))
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                             }
                         }
-                    
-                    if viewModel.notificationsEnabled {
-                        Picker(localizationManager.currentLanguage == "en" ? "Frequency" : "Tần suất", selection: $viewModel.notificationFrequency) {
-                            ForEach(NotificationFrequency.allCases, id: \.self) { frequency in
-                                Text(frequency.displayName).tag(frequency)
+                    }
+                }
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isNotificationsExpanded)
+
+                // MARK: - Content Settings (Collapsible)
+                Section {
+                    // Collapsible Header
+                    Button(action: {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            isContentExpanded.toggle()
+                            saveCollapseState(CollapseStateKeys.content, value: isContentExpanded)
+                        }
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "paintbrush.fill")
+                                .font(.title3)
+                                .foregroundColor(.purple)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(localizationManager.content)
+                                    .font(.body.weight(.semibold))
+                                    .foregroundColor(.primary)
+                                Text("\(spiceLevelEmoji(viewModel.defaultSpiceLevel)) \(localizationManager.currentLanguage == "en" ? "Spice Level" : "Độ cay"): \(viewModel.defaultSpiceLevel)/5")
+                                    .font(.caption)
+                                    .foregroundColor(spiceLevelColor(viewModel.defaultSpiceLevel))
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.secondary)
+                                .rotationEffect(.degrees(isContentExpanded ? 90 : 0))
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+
+                    // Expandable Content
+                    if isContentExpanded {
+                        // Spice Level Selector
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 14) {
+                                SettingsIconView(icon: "flame.fill", color: spiceLevelColor(viewModel.defaultSpiceLevel))
+                                Text(Strings.Settings.Content.defaultSpiceLevel.localized(localizationManager.currentLanguage))
+                                Spacer()
+                                Text("\(spiceLevelEmoji(viewModel.defaultSpiceLevel)) \(viewModel.defaultSpiceLevel)/5")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundColor(spiceLevelColor(viewModel.defaultSpiceLevel))
+                            }
+
+                            HStack(spacing: 10) {
+                                ForEach(1...5, id: \.self) { level in
+                                    Button(action: {
+                                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                        impactFeedback.impactOccurred()
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                            viewModel.updateDefaultSpiceLevel(level)
+                                        }
+                                    }) {
+                                        Image(systemName: level <= viewModel.defaultSpiceLevel ? "flame.fill" : "flame")
+                                            .font(.title2)
+                                            .foregroundColor(level <= viewModel.defaultSpiceLevel ? spiceLevelColor(level) : .gray.opacity(0.4))
+                                            .scaleEffect(level <= viewModel.defaultSpiceLevel ? 1.1 : 1.0)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                }
+                                Spacer()
+                            }
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(12)
+                        }
+                        .padding(.vertical, 4)
+
+                        // Default Category Picker
+                        HStack(spacing: 14) {
+                            SettingsIconView(icon: "folder.fill", color: .orange)
+                            Picker(localizationManager.currentLanguage == "en" ? "Category" : "Danh mục", selection: Binding(
+                                get: { viewModel.defaultCategory },
+                                set: { newValue in
+                                    // Only update if value actually changed by user interaction
+                                    if viewModel.defaultCategory != newValue {
+                                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                        impactFeedback.impactOccurred()
+                                        viewModel.updateDefaultCategory(newValue)
+                                    }
+                                }
+                            )) {
+                                ForEach(RoastCategory.allCases, id: \.self) { category in
+                                    HStack {
+                                        Image(systemName: category.icon)
+                                        Text(localizationManager.categoryName(category))
+                                    }.tag(category)
+                                }
+                            }
+                            .pickerStyle(MenuPickerStyle())
+                        }
+
+                        // Safety Filters Toggle
+                        HStack(spacing: 14) {
+                            SettingsIconView(icon: "shield.fill", color: .green)
+                            Toggle(Strings.Settings.Content.safetyFilters.localized(localizationManager.currentLanguage), isOn: $viewModel.safetyFiltersEnabled)
+                                .onChange(of: viewModel.safetyFiltersEnabled) { enabled in
+                                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                    impactFeedback.impactOccurred()
+                                    viewModel.updateSafetyFilters(enabled)
+                                }
+                        }
+                    }
+                }
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isContentExpanded)
+
+                // MARK: - Language Settings
+                Section {
+                    HStack(spacing: 14) {
+                        SettingsIconView(icon: "globe", color: .blue)
+                        Picker(localizationManager.language, selection: $viewModel.preferredLanguage) {
+                            ForEach(localizationManager.languageOptions, id: \.code) { option in
+                                Text(option.name).tag(option.code)
                             }
                         }
                         .pickerStyle(MenuPickerStyle())
-                        .onChange(of: viewModel.notificationFrequency) { newValue in
-                            viewModel.updateNotificationFrequency(newValue)
-                            notificationManager.scheduleHourlyNotifications()
+                        .onChange(of: viewModel.preferredLanguage) { newValue in
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                            impactFeedback.impactOccurred()
+                            viewModel.updatePreferredLanguage(newValue)
+                            localizationManager.setLanguage(newValue)
                         }
-                        
-                        Button(localizationManager.currentLanguage == "en" ? "Test Notification" : "Test thông báo") {
-                            notificationManager.scheduleTestNotification()
-                            showingNotificationTest = true
-                        }
-                        .foregroundColor(.orange)
-                    }
-                }
-                
-                // Content Settings
-                Section(localizationManager.content) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Mức độ cay mặc định:")
-                            Spacer()
-                            Text("\(viewModel.defaultSpiceLevel)/5")
-                                .fontWeight(.semibold)
-                        }
-                        
-                        HStack(spacing: 8) {
-                            ForEach(1...5, id: \.self) { level in
-                                Image(systemName: level <= viewModel.defaultSpiceLevel ? "flame.fill" : "flame")
-                                    .foregroundColor(level <= viewModel.defaultSpiceLevel ? .orange : .gray)
-                                    .onTapGesture {
-                                        viewModel.updateDefaultSpiceLevel(level)
-                                    }
-                            }
-                        }
-                    }
-                    .padding(.vertical, 4)
-                    
-                    Toggle("Bộ lọc an toàn", isOn: $viewModel.safetyFiltersEnabled)
-                        .onChange(of: viewModel.safetyFiltersEnabled) { enabled in
-                            viewModel.updateSafetyFilters(enabled)
-                        }
-                    
-                    Picker(localizationManager.language, selection: $viewModel.preferredLanguage) {
-                        ForEach(localizationManager.languageOptions, id: \.code) { option in
-                            Text(option.name).tag(option.code)
-                        }
-                    }
-                    .pickerStyle(MenuPickerStyle())
-                    .onChange(of: viewModel.preferredLanguage) { newValue in
-                        viewModel.updatePreferredLanguage(newValue)
-                        localizationManager.setLanguage(newValue)
                     }
                 }
 
-                // API Configuration
-                Section(header:
-                    HStack {
-                        Image(systemName: "key.fill")
-                            .foregroundColor(.orange)
-                        Text("Cấu Hình API")
-                    }
-                ) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        // Info text
-                        Text("Để sử dụng tính năng tạo roast, bạn cần cung cấp API key và URL của dịch vụ AI.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.bottom, 8)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("API Key")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                Text("*")
-                                    .foregroundColor(.red)
-                            }
-                            SecureField("sk-xxxxxxxxxxxxxxxx", text: $viewModel.apiKey)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("Base URL")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                Text("*")
-                                    .foregroundColor(.red)
-                            }
-                            TextField("https://api.example.com/v1/chat/completions", text: $viewModel.baseURL)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .autocapitalization(.none)
-                                .disableAutocorrection(true)
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Model")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            Text("deepseek:deepseek-v3")
-                                .font(.body)
-                                .foregroundColor(.primary)
-                                .padding(.vertical, 8)
-                                .padding(.horizontal, 12)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(8)
-                        }
-
-                        // Test button
-                        Button(action: {
-                            viewModel.testAPIConnection()
-                        }) {
-                            HStack {
-                                Image(systemName: "checkmark.circle")
-                                Text("Test Kết Nối")
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(viewModel.apiKey.isEmpty || viewModel.baseURL.isEmpty ? Color.gray.opacity(0.3) : Color.orange)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                        }
-                        .disabled(viewModel.apiKey.isEmpty || viewModel.baseURL.isEmpty)
-
-                        // Test result
-                        if let testResult = viewModel.apiTestResult {
-                            HStack {
-                                Image(systemName: testResult ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                    .foregroundColor(testResult ? .green : .red)
-                                Text(testResult ? "✅ API hoạt động tốt!" : "❌ Không thể kết nối API")
-                                    .font(.subheadline)
-                                    .foregroundColor(testResult ? .green : .red)
-                                Spacer()
-                            }
-                            .padding(.top, 8)
-                        }
-
-                        // Save status
-                        if !viewModel.apiKey.isEmpty && !viewModel.baseURL.isEmpty {
-                            HStack {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                Text("Cấu hình đã được lưu")
-                                    .font(.caption)
-                                    .foregroundColor(.green)
-                                Spacer()
-                            }
-                            .padding(.top, 4)
-                        }
-                    }
-                    .padding(.vertical, 8)
-                }
-
-                // Data Management - Enhanced Section
+                // MARK: - API Configuration (Collapsible)
                 Section {
-                    NavigationLink(destination: DataManagementView(viewModel: viewModel)) {
-                        HStack {
-                            Image(systemName: "externaldrive")
-                                .foregroundColor(.blue)
+                    // Collapsible Header
+                    Button(action: {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            isAPIConfigExpanded = !shouldExpandAPIConfig
+                            saveAPIConfigCollapseState(isAPIConfigExpanded)
+                        }
+                    }) {
+                        HStack(spacing: 12) {
+                            // Status indicator
+                            Image(systemName: isAPIConfigured ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                                .font(.title3)
+                                .foregroundColor(isAPIConfigured ? .green : .orange)
+
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(localizationManager.currentLanguage == "en" ? "Data Management" : "Quản Lý Dữ Liệu")
-                                    .fontWeight(.medium)
-                                Text(localizationManager.currentLanguage == "en" ? "Export, import, and manage your data" : "Xuất, nhập và quản lý dữ liệu của bạn")
+                                Text(Strings.Settings.APIConfig.sectionTitle.localized(localizationManager.currentLanguage))
+                                    .font(.body.weight(.semibold))
+                                    .foregroundColor(.primary)
+                                Text(isAPIConfigured
+                                    ? (localizationManager.currentLanguage == "en" ? "Configured ✓" : "Đã cấu hình ✓")
+                                    : (localizationManager.currentLanguage == "en" ? "Not configured" : "Chưa cấu hình"))
+                                    .font(.caption)
+                                    .foregroundColor(isAPIConfigured ? .green : .orange)
+                            }
+
+                            Spacer()
+
+                            // Chevron
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.secondary)
+                                .rotationEffect(.degrees(shouldExpandAPIConfig ? 90 : 0))
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+
+                    // Expandable Content
+                    if shouldExpandAPIConfig {
+                        VStack(alignment: .leading, spacing: 16) {
+                            // Info text
+                            HStack(spacing: 10) {
+                                Image(systemName: "info.circle.fill")
+                                    .foregroundColor(.blue)
+                                Text(Strings.Settings.APIConfig.description.localized(localizationManager.currentLanguage))
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
+                            .padding(12)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(10)
+
+                            // API Key Field
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "key.fill")
+                                        .font(.caption)
+                                        .foregroundColor(.orange)
+                                    Text(Strings.Settings.APIConfig.apiKey.localized(localizationManager.currentLanguage))
+                                        .font(.subheadline.weight(.medium))
+                                    Text("*")
+                                        .foregroundColor(.red)
+                                }
+                                SecureField("sk-xxxxxxxxxxxxxxxx", text: $viewModel.apiKey)
+                                    .padding(12)
+                                    .background(Color(.systemGray6))
+                                    .cornerRadius(10)
+                                    .onChange(of: viewModel.apiKey) { _ in
+                                        viewModel.apiTestResult = nil
+                                    }
+                            }
+
+                            // Base URL Field
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "link")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                    Text(Strings.Settings.APIConfig.baseURL.localized(localizationManager.currentLanguage))
+                                        .font(.subheadline.weight(.medium))
+                                    Text("*")
+                                        .foregroundColor(.red)
+                                }
+                                TextField("https://api.example.com/v1/chat/completions", text: $viewModel.baseURL)
+                                    .padding(12)
+                                    .background(Color(.systemGray6))
+                                    .cornerRadius(10)
+                                    .autocapitalization(.none)
+                                    .disableAutocorrection(true)
+                                    .onChange(of: viewModel.baseURL) { _ in
+                                        viewModel.apiTestResult = nil
+                                    }
+                            }
+
+                            // Model Name Field (Editable)
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "cpu")
+                                        .font(.caption)
+                                        .foregroundColor(.purple)
+                                    Text(Strings.Settings.APIConfig.model.localized(localizationManager.currentLanguage))
+                                        .font(.subheadline.weight(.medium))
+                                }
+                                TextField("gemini:gemini-2.5-pro", text: $viewModel.modelName)
+                                    .padding(12)
+                                    .background(Color(.systemGray6))
+                                    .cornerRadius(10)
+                                    .autocapitalization(.none)
+                                    .disableAutocorrection(true)
+                                    .onChange(of: viewModel.modelName) { _ in
+                                        viewModel.apiTestResult = nil
+                                    }
+
+                                Text(localizationManager.currentLanguage == "en"
+                                    ? "Model name for AI service (e.g., gpt-4, gemini:gemini-2.5-pro)"
+                                    : "Tên model của dịch vụ AI (vd: gpt-4, gemini:gemini-2.5-pro)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            // Test Connection Button
+                            Button(action: {
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                                impactFeedback.impactOccurred()
+                                viewModel.testAPIConnection()
+                            }) {
+                                HStack(spacing: 10) {
+                                    if viewModel.isTestingConnection {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                            .scaleEffect(0.8)
+                                    } else {
+                                        Image(systemName: "antenna.radiowaves.left.and.right")
+                                    }
+                                    Text(viewModel.isTestingConnection
+                                        ? (localizationManager.currentLanguage == "en" ? "Testing..." : "Đang kiểm tra...")
+                                        : Strings.Settings.APIConfig.testConnection.localized(localizationManager.currentLanguage))
+                                        .font(.body.weight(.semibold))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(
+                                    LinearGradient(
+                                        colors: viewModel.apiKey.isEmpty || viewModel.baseURL.isEmpty || viewModel.isTestingConnection
+                                            ? [Color.gray.opacity(0.3), Color.gray.opacity(0.2)]
+                                            : [.orange, .red],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
+                                .shadow(color: viewModel.apiKey.isEmpty || viewModel.baseURL.isEmpty || viewModel.isTestingConnection ? .clear : .orange.opacity(0.3), radius: 8, x: 0, y: 4)
+                            }
+                            .buttonStyle(BorderlessButtonStyle())
+                            .disabled(viewModel.apiKey.isEmpty || viewModel.baseURL.isEmpty || viewModel.isTestingConnection)
+
+                            // Test Result
+                            if let testResult = viewModel.apiTestResult {
+                                HStack(spacing: 10) {
+                                    Image(systemName: testResult ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                        .font(.title3)
+                                    Text(testResult
+                                        ? (localizationManager.currentLanguage == "en" ? "Connection successful! Config saved." : "Kết nối thành công! Đã lưu cấu hình.")
+                                        : Strings.Settings.APIConfig.connectionFailed.localized(localizationManager.currentLanguage))
+                                        .font(.subheadline.weight(.medium))
+                                    Spacer()
+                                }
+                                .foregroundColor(testResult ? .green : .red)
+                                .padding(12)
+                                .background((testResult ? Color.green : Color.red).opacity(0.1))
+                                .cornerRadius(10)
+                                .transition(.scale.combined(with: .opacity))
+                            }
+                        }
+                        .padding(.top, 8)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: shouldExpandAPIConfig)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.apiTestResult)
+
+                // MARK: - Data Management (Collapsible)
+                Section {
+                    // Collapsible Header
+                    Button(action: {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            isDataExpanded.toggle()
+                            saveCollapseState(CollapseStateKeys.data, value: isDataExpanded)
+                        }
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "folder.fill")
+                                .font(.title3)
+                                .foregroundColor(.blue)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(localizationManager.data)
+                                    .font(.body.weight(.semibold))
+                                    .foregroundColor(.primary)
+                                Text(localizationManager.currentLanguage == "en" ? "Manage your data" : "Quản lý dữ liệu")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
                             Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.secondary)
+                                .rotationEffect(.degrees(isDataExpanded ? 90 : 0))
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+
+                    // Expandable Content
+                    if isDataExpanded {
+                        // Data Management Navigation
+                        NavigationLink(destination: DataManagementView(viewModel: viewModel)) {
+                            HStack(spacing: 14) {
+                                SettingsIconView(icon: "externaldrive.fill", color: .blue)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(Strings.Settings.Data.dataManagement.localized(localizationManager.currentLanguage))
+                                        .font(.body.weight(.medium))
+                                        .foregroundColor(.primary)
+                                    Text(Strings.Settings.Data.dataManagementDesc.localized(localizationManager.currentLanguage))
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                            }
+                        }
+
+                        // Clear History Button
+                        Button(action: {
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                            impactFeedback.impactOccurred()
+                            showingClearHistoryAlert = true
+                        }) {
+                            HStack(spacing: 14) {
+                                SettingsIconView(icon: "clock.arrow.circlepath", color: .red)
+                                Text(localizationManager.clearHistory)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        // Clear Favorites Button
+                        Button(action: {
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                            impactFeedback.impactOccurred()
+                            showingClearFavoritesAlert = true
+                        }) {
+                            HStack(spacing: 14) {
+                                SettingsIconView(icon: "heart.slash.fill", color: .red)
+                                Text(localizationManager.clearFavorites)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        // Reset Settings Button
+                        Button(action: {
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
+                            impactFeedback.impactOccurred()
+                            showingResetSettingsAlert = true
+                        }) {
+                            HStack(spacing: 14) {
+                                SettingsIconView(icon: "arrow.counterclockwise", color: .red)
+                                Text(localizationManager.resetSettings)
+                                    .foregroundColor(.red)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
-
-                    Divider()
-
-                    // Quick Actions
-                    Button(localizationManager.clearHistory) {
-                        viewModel.clearRoastHistory()
-                    }
-                    .foregroundColor(.red)
-
-                    Button(localizationManager.clearFavorites) {
-                        viewModel.clearFavorites()
-                    }
-                    .foregroundColor(.red)
-
-                    Button(localizationManager.resetSettings) {
-                        viewModel.resetAllSettings()
-                    }
-                    .foregroundColor(.red)
-                } header: {
-                    Text(localizationManager.data)
                 }
-                
-                // Version Info
-                Section(localizationManager.version) {
-                    HStack {
-                        Text("Phiên bản")
-                        Spacer()
-                        Text(Constants.App.version)
-                            .foregroundColor(.secondary)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDataExpanded)
+
+                // MARK: - App Info (Collapsible)
+                Section {
+                    // Collapsible Header
+                    Button(action: {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            isAppInfoExpanded.toggle()
+                            saveCollapseState(CollapseStateKeys.appInfo, value: isAppInfoExpanded)
+                        }
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "app.fill")
+                                .font(.title3)
+                                .foregroundColor(.orange)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(Strings.Settings.AppInfo.sectionTitle.localized(localizationManager.currentLanguage))
+                                    .font(.body.weight(.semibold))
+                                    .foregroundColor(.primary)
+                                Text(localizationManager.currentLanguage == "en" ? "About, Rate & Support" : "Giới thiệu, Đánh giá & Hỗ trợ")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.secondary)
+                                .rotationEffect(.degrees(isAppInfoExpanded ? 90 : 0))
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+
+                    // Expandable Content
+                    if isAppInfoExpanded {
+                        // About Button
+                        Button(action: {
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                            impactFeedback.impactOccurred()
+                            showingAbout = true
+                        }) {
+                            HStack(spacing: 14) {
+                                SettingsIconView(icon: "info.circle.fill", color: .orange)
+                                Text(Strings.Settings.AppInfo.about.localized(localizationManager.currentLanguage))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        // Rate App Link
+                        Link(destination: URL(string: "https://apps.apple.com")!) {
+                            HStack(spacing: 14) {
+                                SettingsIconView(icon: "star.fill", color: .yellow)
+                                Text(Strings.Settings.AppInfo.rateApp.localized(localizationManager.currentLanguage))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: "arrow.up.right.square")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        // Contact Support Link
+                        Link(destination: URL(string: "mailto:support@roastme.app")!) {
+                            HStack(spacing: 14) {
+                                SettingsIconView(icon: "envelope.fill", color: .blue)
+                                Text(Strings.Settings.AppInfo.contactSupport.localized(localizationManager.currentLanguage))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: "arrow.up.right.square")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
                     }
                 }
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isAppInfoExpanded)
 
-                // App Info
-                Section("Thông Tin Ứng Dụng") {
-                    Button("Giới thiệu") {
-                        showingAbout = true
+                // MARK: - Streak Statistics Section (Collapsible)
+                Section {
+                    // Collapsible Header
+                    Button(action: {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            isStreakExpanded.toggle()
+                            saveCollapseState(CollapseStateKeys.streak, value: isStreakExpanded)
+                        }
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "flame.fill")
+                                .font(.title3)
+                                .foregroundColor(.orange)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(Strings.Streak.sectionTitle.localized(localizationManager.currentLanguage))
+                                    .font(.body.weight(.semibold))
+                                    .foregroundColor(.primary)
+                                Text("\(appLifecycleManager.currentStreak.currentStreak) \(localizationManager.currentLanguage == "en" ? "days" : "ngày")")
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.secondary)
+                                .rotationEffect(.degrees(isStreakExpanded ? 90 : 0))
+                        }
+                        .padding(.vertical, 2)
                     }
-                    .foregroundColor(.orange)
+                    .buttonStyle(PlainButtonStyle())
 
-                    Link("Đánh giá ứng dụng", destination: URL(string: "https://apps.apple.com")!)
-                        .foregroundColor(.orange)
+                    // Expandable Content
+                    if isStreakExpanded {
+                        StreakBadgeView(
+                            streak: appLifecycleManager.currentStreak,
+                            status: appLifecycleManager.streakStatus,
+                            isCompact: false
+                        )
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
 
-                    Link("Liên hệ hỗ trợ", destination: URL(string: "mailto:support@roastme.app")!)
-                        .foregroundColor(.orange)
+                        // Streak Freeze Button (if available and streak is expired)
+                        if case .expired = appLifecycleManager.streakStatus,
+                           appLifecycleManager.currentStreak.streakFreezeAvailable,
+                           appLifecycleManager.currentStreak.currentStreak >= 7 {
+                            Button(action: {
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                                impactFeedback.impactOccurred()
+                                showingStreakFreezeAlert = true
+                            }) {
+                                HStack(spacing: 14) {
+                                    SettingsIconView(icon: "snowflake", color: .blue)
+                                    Text(Strings.Streak.useStreakFreeze.localized(localizationManager.currentLanguage))
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.secondary)
+                                        .font(.caption)
+                                }
+                            }
+                        }
+
+                        // Milestones
+                        NavigationLink(destination: StreakMilestonesView()) {
+                            HStack(spacing: 14) {
+                                SettingsIconView(icon: "trophy.fill", color: .yellow)
+                                Text(Strings.Streak.streakMilestones.localized(localizationManager.currentLanguage))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                            }
+                        }
+                    }
                 }
-                
-                // Statistics
-                Section("Thống Kê") {
-                    HStack {
-                        Text("Tổng số roast đã tạo")
-                        Spacer()
-                        Text("\(viewModel.totalRoastsGenerated)")
-                            .foregroundColor(.secondary)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreakExpanded)
+
+                // MARK: - Statistics (Collapsible)
+                Section {
+                    // Collapsible Header
+                    Button(action: {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            isStatisticsExpanded.toggle()
+                            saveCollapseState(CollapseStateKeys.statistics, value: isStatisticsExpanded)
+                        }
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "chart.bar.fill")
+                                .font(.title3)
+                                .foregroundColor(.purple)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(Strings.Settings.Statistics.sectionTitle.localized(localizationManager.currentLanguage))
+                                    .font(.body.weight(.semibold))
+                                    .foregroundColor(.primary)
+                                Text("\(viewModel.totalRoastsGenerated) \(localizationManager.currentLanguage == "en" ? "roasts" : "roast")")
+                                    .font(.caption)
+                                    .foregroundColor(.purple)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.secondary)
+                                .rotationEffect(.degrees(isStatisticsExpanded ? 90 : 0))
+                        }
+                        .padding(.vertical, 2)
                     }
-                    
-                    HStack {
-                        Text("Roast yêu thích")
-                        Spacer()
-                        Text("\(viewModel.totalFavorites)")
-                            .foregroundColor(.secondary)
+                    .buttonStyle(PlainButtonStyle())
+
+                    // Expandable Content
+                    if isStatisticsExpanded {
+                        // Total Roasts
+                        HStack(spacing: 14) {
+                            SettingsIconView(icon: "number.circle.fill", color: .purple)
+                            Text(Strings.Settings.Statistics.totalRoastsGenerated.localized(localizationManager.currentLanguage))
+                            Spacer()
+                            Text("\(viewModel.totalRoastsGenerated)")
+                                .font(.headline.weight(.semibold))
+                                .foregroundColor(.purple)
+                        }
+
+                        // Favorite Roasts
+                        HStack(spacing: 14) {
+                            SettingsIconView(icon: "heart.fill", color: .red)
+                            Text(Strings.Settings.Statistics.favoriteRoasts.localized(localizationManager.currentLanguage))
+                            Spacer()
+                            Text("\(viewModel.totalFavorites)")
+                                .font(.headline.weight(.semibold))
+                                .foregroundColor(.red)
+                        }
+
+                        // Most Popular Category
+                        HStack(spacing: 14) {
+                            SettingsIconView(icon: "crown.fill", color: .orange)
+                            Text(Strings.Settings.Statistics.mostPopularCategory.localized(localizationManager.currentLanguage))
+                            Spacer()
+                            if let category = viewModel.mostPopularCategory {
+                                Text(localizationManager.categoryName(category))
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundColor(.orange)
+                            } else {
+                                Text(Strings.Settings.Statistics.notAvailable.localized(localizationManager.currentLanguage))
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundColor(.orange)
+                            }
+                        }
                     }
-                    
+                }
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStatisticsExpanded)
+
+                // MARK: - Version Info (Footer)
+                Section {
                     HStack {
-                        Text("Danh mục phổ biến nhất")
                         Spacer()
-                        Text(viewModel.mostPopularCategory?.displayName ?? "Chưa có")
-                            .foregroundColor(.secondary)
+                        VStack(spacing: 4) {
+                            Text("RoastMeLater")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundColor(.secondary)
+                            Text("v\(Constants.App.version)")
+                                .font(.caption)
+                                .foregroundColor(.secondary.opacity(0.7))
+                        }
+                        Spacer()
                     }
+                    .padding(.vertical, 8)
+                    .listRowBackground(Color.clear)
                 }
             }
-            .navigationTitle("Cài Đặt")
+            .listStyle(.insetGrouped)
+            .navigationTitle(Strings.Settings.title.localized(localizationManager.currentLanguage))
         }
         .sheet(isPresented: $showingAbout) {
             AboutView()
         }
-        .alert(localizationManager.currentLanguage == "en" ? "Test Notification" : "Thông báo test", isPresented: $showingNotificationTest) {
-            Button("OK") { }
+        .alert(Strings.Settings.Notifications.testNotification.localized(localizationManager.currentLanguage), isPresented: $showingNotificationTest) {
+            Button(Strings.Common.ok.localized(localizationManager.currentLanguage)) { }
         } message: {
-            Text(localizationManager.currentLanguage == "en" ? "Test notification will appear in 5 seconds!" : "Thông báo test sẽ xuất hiện sau 5 giây!")
+            Text(Strings.Settings.Notifications.testNotificationMessage.localized(localizationManager.currentLanguage))
+        }
+        .alert(Strings.Streak.useStreakFreezeConfirm.localized(localizationManager.currentLanguage), isPresented: $showingStreakFreezeAlert) {
+            Button(Strings.Common.cancel.localized(localizationManager.currentLanguage), role: .cancel) { }
+            Button(Strings.Streak.useFreeze.localized(localizationManager.currentLanguage), role: .destructive) {
+                _ = appLifecycleManager.useStreakFreeze()
+            }
+        } message: {
+            Text(Strings.Streak.useStreakFreezeMessage.localized(localizationManager.currentLanguage))
+        }
+        // Clear History Alert
+        .alert(localizationManager.clearHistory, isPresented: $showingClearHistoryAlert) {
+            Button(Strings.Common.cancel.localized(localizationManager.currentLanguage), role: .cancel) { }
+            Button(Strings.Common.delete.localized(localizationManager.currentLanguage), role: .destructive) {
+                viewModel.clearRoastHistory()
+            }
+        } message: {
+            Text(localizationManager.currentLanguage == "en" ? "Are you sure you want to clear all roast history? This action cannot be undone." : "Bạn có chắc muốn xóa toàn bộ lịch sử roast? Hành động này không thể hoàn tác.")
+        }
+        // Clear Favorites Alert
+        .alert(localizationManager.clearFavorites, isPresented: $showingClearFavoritesAlert) {
+            Button(Strings.Common.cancel.localized(localizationManager.currentLanguage), role: .cancel) { }
+            Button(Strings.Common.delete.localized(localizationManager.currentLanguage), role: .destructive) {
+                viewModel.clearFavorites()
+            }
+        } message: {
+            Text(localizationManager.currentLanguage == "en" ? "Are you sure you want to clear all favorites? This action cannot be undone." : "Bạn có chắc muốn xóa toàn bộ yêu thích? Hành động này không thể hoàn tác.")
+        }
+        // Reset Settings Alert
+        .alert(localizationManager.resetSettings, isPresented: $showingResetSettingsAlert) {
+            Button(Strings.Common.cancel.localized(localizationManager.currentLanguage), role: .cancel) { }
+            Button(Strings.Common.delete.localized(localizationManager.currentLanguage), role: .destructive) {
+                viewModel.resetAllSettings()
+            }
+        } message: {
+            Text(localizationManager.currentLanguage == "en" ? "Are you sure you want to reset all settings to default? This action cannot be undone." : "Bạn có chắc muốn đặt lại tất cả cài đặt về mặc định? Hành động này không thể hoàn tác.")
         }
         .onAppear {
             viewModel.loadSettings()
+            appLifecycleManager.refreshStreakData()
         }
         .onTapGesture {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
+    }
+}
+
+// MARK: - Settings Helper Components
+
+/// Icon view for settings rows
+struct SettingsIconView: View {
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        Image(systemName: icon)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundColor(.white)
+            .frame(width: 28, height: 28)
+            .background(color)
+            .cornerRadius(6)
+    }
+}
+
+/// Section header with icon
+struct SettingsSectionHeader: View {
+    let icon: String
+    let title: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundColor(color)
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
         }
     }
 }
@@ -306,8 +990,7 @@ struct AboutView: View {
 
                         VStack(spacing: 8) {
                             Text("RoastMe Generator")
-                                .font(.largeTitle)
-                                .fontWeight(.bold)
+                                .font(.largeTitle.weight(.bold))
 
                             Text("🎯 Giải tỏa stress với những câu roast hài hước")
                                 .font(.headline)
@@ -322,8 +1005,7 @@ struct AboutView: View {
                             Image(systemName: "target")
                                 .foregroundColor(.orange)
                             Text("Sứ mệnh")
-                                .font(.title2)
-                                .fontWeight(.bold)
+                                .font(.title2.weight(.bold))
                         }
 
                         Text("Mang lại tiếng cười và giúp dân văn phòng giải tỏa căng thẳng công việc thông qua những câu roast vui nhộn, phù hợp với văn hóa Việt Nam.")
@@ -340,8 +1022,7 @@ struct AboutView: View {
                             Image(systemName: "star.fill")
                                 .foregroundColor(.orange)
                             Text("Tính năng nổi bật")
-                                .font(.title2)
-                                .fontWeight(.bold)
+                                .font(.title2.weight(.bold))
                         }
 
                         VStack(spacing: 12) {
@@ -365,8 +1046,7 @@ struct AboutView: View {
                             Image(systemName: "gearshape.fill")
                                 .foregroundColor(.orange)
                             Text("Cách hoạt động")
-                                .font(.title2)
-                                .fontWeight(.bold)
+                                .font(.title2.weight(.bold))
                         }
 
                         VStack(spacing: 12) {
@@ -386,8 +1066,7 @@ struct AboutView: View {
                             Image(systemName: "person.fill")
                                 .foregroundColor(.orange)
                             Text("Đội ngũ phát triển")
-                                .font(.title2)
-                                .fontWeight(.bold)
+                                .font(.title2.weight(.bold))
                         }
 
                         Text("Được phát triển bởi đội ngũ RoastMe Team với mong muốn mang lại tiếng cười và giảm stress cho cộng đồng dân văn phòng Việt Nam.")
@@ -483,15 +1162,13 @@ struct HowItWorksStep: View {
                     .fill(Color.orange)
                     .frame(width: 28, height: 28)
                 Text(number)
-                    .font(.caption)
-                    .fontWeight(.bold)
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.white)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+                    .font(.subheadline.weight(.semibold))
                 Text(description)
                     .font(.caption)
                     .foregroundColor(.secondary)

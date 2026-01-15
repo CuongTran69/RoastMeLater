@@ -10,119 +10,111 @@ struct ExportOptionsView: View {
     @State private var includeStatistics = true
     @State private var anonymizeData = false
     
+    private var currentLanguage: String {
+        localizationManager.currentLanguage
+    }
+
     var body: some View {
         NavigationView {
             Form {
                 Section {
-                    Text(localizationManager.currentLanguage == "en"
-                         ? "Choose what data to include in your export. Sensitive information like API keys can be excluded for security."
-                         : "Chọn dữ liệu nào sẽ được bao gồm trong file xuất. Thông tin nhạy cảm như API key có thể được loại bỏ để bảo mật.")
+                    Text(Strings.DataManagement.Export.optionsDescription.localized(currentLanguage))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 } header: {
-                    Text(localizationManager.currentLanguage == "en" ? "Export Options" : "Tùy Chọn Xuất")
+                    Text(Strings.DataManagement.Export.options.localized(currentLanguage))
                 }
-                
+
                 Section {
                     Toggle(isOn: $includeAPIConfiguration) {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Image(systemName: "key.fill")
                                     .foregroundColor(.orange)
-                                Text(localizationManager.currentLanguage == "en" ? "API Configuration" : "Cấu Hình API")
-                                    .fontWeight(.medium)
+                                Text(Strings.DataManagement.Export.apiConfiguration.localized(currentLanguage))
+                                    .font(.body.weight(.medium))
                             }
-                            Text(localizationManager.currentLanguage == "en"
-                                 ? "Include API keys and endpoints (not recommended for sharing)"
-                                 : "Bao gồm API key và endpoint (không khuyến nghị khi chia sẻ)")
+                            Text(Strings.DataManagement.Export.includeAPIKeys.localized(currentLanguage))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                     }
-                    
+
                     Toggle(isOn: $includeDeviceInfo) {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Image(systemName: "iphone")
                                     .foregroundColor(.blue)
-                                Text(localizationManager.currentLanguage == "en" ? "Device Information" : "Thông Tin Thiết Bị")
-                                    .fontWeight(.medium)
+                                Text(Strings.DataManagement.Export.deviceInformation.localized(currentLanguage))
+                                    .font(.body.weight(.medium))
                             }
-                            Text(localizationManager.currentLanguage == "en"
-                                 ? "Include device model and iOS version for compatibility"
-                                 : "Bao gồm model thiết bị và phiên bản iOS để tương thích")
+                            Text(Strings.DataManagement.Export.includeDeviceInfo.localized(currentLanguage))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                     }
-                    
+
                     Toggle(isOn: $includeStatistics) {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Image(systemName: "chart.bar")
                                     .foregroundColor(.green)
-                                Text(localizationManager.currentLanguage == "en" ? "Usage Statistics" : "Thống Kê Sử Dụng")
-                                    .fontWeight(.medium)
+                                Text(Strings.DataManagement.Export.usageStatistics.localized(currentLanguage))
+                                    .font(.body.weight(.medium))
                             }
-                            Text(localizationManager.currentLanguage == "en"
-                                 ? "Include category breakdown and usage patterns"
-                                 : "Bao gồm phân tích danh mục và mẫu sử dụng")
+                            Text(Strings.DataManagement.Export.includeStats.localized(currentLanguage))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                     }
-                    
+
                     Toggle(isOn: $anonymizeData) {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Image(systemName: "eye.slash")
                                     .foregroundColor(.purple)
-                                Text(localizationManager.currentLanguage == "en" ? "Anonymize Data" : "Ẩn Danh Dữ Liệu")
-                                    .fontWeight(.medium)
+                                Text(Strings.DataManagement.Export.anonymizeData.localized(currentLanguage))
+                                    .font(.body.weight(.medium))
                             }
-                            Text(localizationManager.currentLanguage == "en"
-                                 ? "Remove potentially identifying information from roast content"
-                                 : "Loại bỏ thông tin có thể nhận dạng khỏi nội dung roast")
+                            Text(Strings.DataManagement.Export.anonymizeDescription.localized(currentLanguage))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                     }
                 } header: {
-                    Text(localizationManager.currentLanguage == "en" ? "Data to Include" : "Dữ Liệu Bao Gồm")
+                    Text(Strings.DataManagement.Export.dataToInclude.localized(currentLanguage))
                 }
-                
+
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Image(systemName: "info.circle")
                                 .foregroundColor(.blue)
-                            Text(localizationManager.currentLanguage == "en" ? "What's Always Included" : "Luôn Được Bao Gồm")
-                                .fontWeight(.semibold)
+                            Text(Strings.DataManagement.Export.whatsIncluded.localized(currentLanguage))
+                                .font(.body.weight(.semibold))
                         }
-                        
+
                         VStack(alignment: .leading, spacing: 4) {
-                            BulletPoint(text: localizationManager.currentLanguage == "en" ? "All roast history and content" : "Toàn bộ lịch sử và nội dung roast")
-                            BulletPoint(text: localizationManager.currentLanguage == "en" ? "Favorite roasts list" : "Danh sách roast yêu thích")
-                            BulletPoint(text: localizationManager.currentLanguage == "en" ? "User preferences and settings" : "Tùy chọn và cài đặt người dùng")
-                            BulletPoint(text: localizationManager.currentLanguage == "en" ? "Export metadata and timestamp" : "Metadata và thời gian xuất")
+                            BulletPoint(text: Strings.DataManagement.Export.allRoastHistory.localized(currentLanguage))
+                            BulletPoint(text: Strings.DataManagement.Export.favoritesList.localized(currentLanguage))
+                            BulletPoint(text: Strings.DataManagement.Export.userPreferences.localized(currentLanguage))
+                            BulletPoint(text: Strings.DataManagement.Export.exportMetadata.localized(currentLanguage))
                         }
                     }
                 } header: {
-                    Text(localizationManager.currentLanguage == "en" ? "Export Details" : "Chi Tiết Xuất")
+                    Text(Strings.DataManagement.Export.details.localized(currentLanguage))
                 }
-                
+
                 Section {
                     if includeAPIConfiguration {
                         HStack {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundColor(.red)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(localizationManager.currentLanguage == "en" ? "Security Warning" : "Cảnh Báo Bảo Mật")
-                                    .fontWeight(.semibold)
+                                Text(Strings.DataManagement.Export.securityWarning.localized(currentLanguage))
+                                    .font(.body.weight(.semibold))
                                     .foregroundColor(.red)
-                                Text(localizationManager.currentLanguage == "en"
-                                     ? "API keys will be included in plain text. Only share this file with trusted recipients."
-                                     : "API key sẽ được bao gồm dưới dạng văn bản thuần. Chỉ chia sẻ file này với người tin cậy.")
+                                Text(Strings.DataManagement.Export.apiKeyWarning.localized(currentLanguage))
                                     .font(.caption)
                                     .foregroundColor(.red)
                             }
@@ -131,18 +123,16 @@ struct ExportOptionsView: View {
                         .background(Color.red.opacity(0.1))
                         .cornerRadius(8)
                     }
-                    
+
                     if anonymizeData {
                         HStack {
                             Image(systemName: "info.circle.fill")
                                 .foregroundColor(.blue)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(localizationManager.currentLanguage == "en" ? "Anonymization Note" : "Lưu Ý Ẩn Danh")
-                                    .fontWeight(.semibold)
+                                Text(Strings.DataManagement.Export.anonymizationNote.localized(currentLanguage))
+                                    .font(.body.weight(.semibold))
                                     .foregroundColor(.blue)
-                                Text(localizationManager.currentLanguage == "en"
-                                     ? "Basic anonymization will be applied. Review exported content before sharing."
-                                     : "Ẩn danh cơ bản sẽ được áp dụng. Xem lại nội dung đã xuất trước khi chia sẻ.")
+                                Text(Strings.DataManagement.Export.anonymizationDescription.localized(currentLanguage))
                                     .font(.caption)
                                     .foregroundColor(.blue)
                             }
@@ -153,17 +143,17 @@ struct ExportOptionsView: View {
                     }
                 }
             }
-            .navigationTitle(localizationManager.currentLanguage == "en" ? "Export Options" : "Tùy Chọn Xuất")
+            .navigationTitle(Strings.DataManagement.Export.options.localized(currentLanguage))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(localizationManager.cancel) {
+                    Button(Strings.Common.cancel.localized(currentLanguage)) {
                         dismiss()
                     }
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(localizationManager.currentLanguage == "en" ? "Export" : "Xuất") {
+                    Button(Strings.DataManagement.Export.exportButton.localized(currentLanguage)) {
                         let options = ExportOptions(
                             includeAPIConfiguration: includeAPIConfiguration,
                             includeDeviceInfo: includeDeviceInfo,

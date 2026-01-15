@@ -18,9 +18,9 @@ RoastMeLater là ứng dụng iOS độc đáo giúp dân văn phòng giải t�
 - **Feedback trực quan**: Toast notification và haptic feedback
 - **Navigation thông minh**: Giữ nguyên config khi chuyển tab
 
-### 📚 **Quản Lý Nội Dung**
-- **Lịch sử**: Xem lại tất cả roast đã tạo
-- **Yêu thích**: Lưu những roast hay nhất
+### 📚 **Thư Viện Roast (Library)**
+- **Tất cả roast**: Xem lại toàn bộ roast đã tạo
+- **Yêu thích**: Lọc nhanh những roast đã đánh dấu yêu thích
 - **Tìm kiếm**: Tìm roast theo nội dung hoặc danh mục
 - **Lọc**: Lọc theo danh mục cụ thể
 
@@ -32,8 +32,8 @@ RoastMeLater là ứng dụng iOS độc đáo giúp dân văn phòng giải t�
 ## 🛠 Cài Đặt & Sử Dụng
 
 ### Yêu Cầu Hệ Thống
-- iOS 13.0+
-- Xcode 12.0+
+- iOS 15.0+ (tối ưu cho iOS 16.0+)
+- Xcode 14.0+
 - Swift 5.0+
 
 ### Cài Đặt Dependencies
@@ -84,18 +84,31 @@ RoastMeLater/
 ├── Models/              # Data models
 │   ├── Roast.swift
 │   ├── RoastCategory.swift
-│   └── UserPreferences.swift
+│   ├── UserPreferences.swift
+│   └── UserStreak.swift
 ├── Views/               # SwiftUI Views
 │   ├── RoastGeneratorView.swift
-│   ├── RoastHistoryView.swift
-│   ├── FavoritesView.swift
-│   └── SettingsView.swift
+│   ├── LibraryView.swift        # Merged History + Favorites
+│   ├── SettingsView.swift
+│   ├── SplashView.swift
+│   └── Components/
 ├── ViewModels/          # MVVM ViewModels
+│   ├── RoastGeneratorViewModel.swift
+│   ├── LibraryViewModel.swift
+│   └── SettingsViewModel.swift
 ├── Services/            # Business Logic
 │   ├── AIService.swift
 │   ├── StorageService.swift
-│   └── NotificationManager.swift
+│   ├── NotificationManager.swift
+│   └── StreakService.swift
+├── Localization/        # Multi-language support
+│   ├── LocalizationBase.swift
+│   ├── LibraryStrings.swift
+│   └── ...
 └── Utils/               # Utilities & Helpers
+    ├── Constants.swift
+    ├── LocalizationManager.swift
+    └── ...
 ```
 
 ## 🎨 Screenshots

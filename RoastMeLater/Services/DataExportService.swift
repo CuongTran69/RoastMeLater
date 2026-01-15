@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import RxSwift
 import RxCocoa
+import CryptoKit
 
 // MARK: - Export Data Models
 
@@ -11,6 +12,7 @@ struct AppDataExport: Codable {
     let roastHistory: [Roast]
     let favorites: [UUID] // Store favorite IDs separately for efficiency
     let statistics: ExportStatistics
+    let checksum: String? // SHA256 checksum for data integrity
 }
 
 struct ExportMetadata: Codable {
@@ -134,7 +136,7 @@ class DataExportService: DataExportServiceProtocol {
     private let currentDataVersion = 1
     private let maxFileSize: Int64 = 100 * 1024 * 1024 // 100MB limit
 
-    init(storageService: StorageServiceProtocol = StorageService(),
+    init(storageService: StorageServiceProtocol = StorageService.shared,
          errorHandler: DataErrorHandlerProtocol = DataErrorHandler(),
          sanitizationService: DataSanitizationProtocol = DataSanitizationService(),
          fileSecurityService: FileSecurityProtocol = FileSecurityService()) {
@@ -276,8 +278,42 @@ class DataExportService: DataExportServiceProtocol {
             )
             
             let statistics = options.includeStatistics ? createStatistics(roasts: processedRoasts) : nil
-            
-            // Create export data
+
+            // Phase 6: Serializing
+            observer.onNext(ExportProgress(
+                phase: .serializing,
+                progress: 0.8,
+                message: "Tạo file JSON...",
+                itemsProcessed: totalItems,
+                totalItems: totalItems
+            ))
+
+            // Create export data without checksum first
+            let exportDataWithoutChecksum = AppDataExport(
+                metadata: metadata,
+                userPreferences: options.includeAPIConfiguration ? preferences : sanitizePreferences(preferences),
+                roastHistory: processedRoasts,
+                favorites: favoriteIds,
+                statistics: statistics ?? ExportStatistics(
+                    categoryBreakdown: [:],
+                    averageSpiceLevel: 0,
+                    mostPopularCategory: nil,
+                    dateRange: nil
+                ),
+                checksum: nil
+            )
+
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+
+            // Encode without checksum to calculate checksum
+            let dataWithoutChecksum = try encoder.encode(exportDataWithoutChecksum)
+
+            // Calculate checksum
+            let checksum = calculateChecksum(data: dataWithoutChecksum)
+
+            // Create final export data with checksum
             let exportData = AppDataExport(
                 metadata: metadata,
                 userPreferences: options.includeAPIConfiguration ? preferences : sanitizePreferences(preferences),
@@ -288,22 +324,10 @@ class DataExportService: DataExportServiceProtocol {
                     averageSpiceLevel: 0,
                     mostPopularCategory: nil,
                     dateRange: nil
-                )
+                ),
+                checksum: checksum
             )
-            
-            // Phase 6: Serializing
-            observer.onNext(ExportProgress(
-                phase: .serializing,
-                progress: 0.8,
-                message: "Tạo file JSON...",
-                itemsProcessed: totalItems,
-                totalItems: totalItems
-            ))
-            
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            
+
             let jsonData = try encoder.encode(exportData)
             
             // Check file size
@@ -538,7 +562,8 @@ class DataExportService: DataExportServiceProtocol {
                     averageSpiceLevel: 0,
                     mostPopularCategory: nil,
                     dateRange: nil
-                )
+                ),
+                checksum: nil
             )
 
             let complianceIssues = PrivacyCompliance.validateExportCompliance(mockExportData, config: securityConfig)
@@ -569,7 +594,8 @@ class DataExportService: DataExportServiceProtocol {
             userPreferences: sanitizedUserPreferences,
             roastHistory: sanitizedRoastHistory,
             favorites: exportData.favorites,
-            statistics: exportData.statistics
+            statistics: exportData.statistics,
+            checksum: exportData.checksum
         )
 
         return secureData
@@ -582,6 +608,11 @@ class DataExportService: DataExportServiceProtocol {
         guard try fileSecurityService.validateFileIntegrity(url) else {
             throw DataManagementError.exportFileWriteFailed(path: url.path, underlying: NSError(domain: "FileIntegrity", code: -1, userInfo: [NSLocalizedDescriptionKey: "File integrity validation failed"]))
         }
+    }
+
+    private func calculateChecksum(data: Data) -> String {
+        let hash = SHA256.hash(data: data)
+        return hash.compactMap { String(format: "%02x", $0) }.joined()
     }
 }
 

@@ -8,6 +8,8 @@ struct ImportPreviewView: View {
     @State private var importStrategy: ImportStrategy = .merge
     @State private var skipDuplicates = true
     @State private var preserveExistingFavorites = true
+    @State private var allowPartialImport = true
+    @State private var maxErrorsAllowed = 10
     
     var body: some View {
         NavigationView {
@@ -24,7 +26,9 @@ struct ImportPreviewView: View {
                         ImportOptionsSection(
                             importStrategy: $importStrategy,
                             skipDuplicates: $skipDuplicates,
-                            preserveExistingFavorites: $preserveExistingFavorites
+                            preserveExistingFavorites: $preserveExistingFavorites,
+                            allowPartialImport: $allowPartialImport,
+                            maxErrorsAllowed: $maxErrorsAllowed
                         )
                         
                         // Warnings
@@ -45,7 +49,9 @@ struct ImportPreviewView: View {
                                     strategy: importStrategy,
                                     validateData: true,
                                     skipDuplicates: skipDuplicates,
-                                    preserveExistingFavorites: preserveExistingFavorites
+                                    preserveExistingFavorites: preserveExistingFavorites,
+                                    allowPartialImport: allowPartialImport,
+                                    maxErrorsAllowed: maxErrorsAllowed
                                 )
                                 viewModel.confirmImport(with: options)
                                 dismiss()
@@ -59,7 +65,7 @@ struct ImportPreviewView: View {
                 }
                 .padding()
             }
-            .navigationTitle(localizationManager.currentLanguage == "en" ? "Import Preview" : "Xem Trước Nhập")
+            .navigationTitle(Strings.DataManagement.Import.preview.localized(localizationManager.currentLanguage))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -82,26 +88,25 @@ struct FileInfoSection: View {
             HStack {
                 Image(systemName: "doc.text")
                     .foregroundColor(.blue)
-                Text(localizationManager.currentLanguage == "en" ? "File Information" : "Thông Tin File")
-                    .font(.headline)
-                    .fontWeight(.semibold)
+                Text(Strings.DataManagement.Import.fileInformation.localized(localizationManager.currentLanguage))
+                    .font(.headline.weight(.semibold))
             }
-            
+
             VStack(spacing: 8) {
                 InfoRow(
-                    label: localizationManager.currentLanguage == "en" ? "App Version" : "Phiên bản ứng dụng",
+                    label: Strings.DataManagement.Import.appVersion.localized(localizationManager.currentLanguage),
                     value: preview.metadata.version
                 )
                 InfoRow(
-                    label: localizationManager.currentLanguage == "en" ? "Export Date" : "Ngày xuất",
+                    label: Strings.DataManagement.Import.exportDate.localized(localizationManager.currentLanguage),
                     value: DateFormatter.localizedString(from: preview.metadata.exportDate, dateStyle: .medium, timeStyle: .short)
                 )
                 InfoRow(
-                    label: localizationManager.currentLanguage == "en" ? "Data Version" : "Phiên bản dữ liệu",
+                    label: Strings.DataManagement.Import.dataVersion.localized(localizationManager.currentLanguage),
                     value: "\(preview.metadata.dataVersion)"
                 )
                 InfoRow(
-                    label: localizationManager.currentLanguage == "en" ? "Device" : "Thiết bị",
+                    label: Strings.DataManagement.Import.device.localized(localizationManager.currentLanguage),
                     value: "\(preview.metadata.deviceInfo.platform) \(preview.metadata.deviceInfo.osVersion)"
                 )
             }
@@ -121,37 +126,34 @@ struct DataSummarySection: View {
             HStack {
                 Image(systemName: "chart.bar")
                     .foregroundColor(.green)
-                Text(localizationManager.currentLanguage == "en" ? "Data Summary" : "Tổng Quan Dữ Liệu")
-                    .font(.headline)
-                    .fontWeight(.semibold)
+                Text(Strings.DataManagement.Import.dataSummary.localized(localizationManager.currentLanguage))
+                    .font(.headline.weight(.semibold))
             }
-            
+
             LazyVGrid(columns: [
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 12) {
                 SummaryCard(
-                    title: localizationManager.currentLanguage == "en" ? "Total Roasts" : "Tổng Roast",
+                    title: Strings.DataManagement.totalRoasts.localized(localizationManager.currentLanguage),
                     value: "\(preview.summary.totalRoasts)",
-                    subtitle: localizationManager.currentLanguage == "en" ? "\(preview.summary.newRoasts) new" : "\(preview.summary.newRoasts) mới",
+                    subtitle: Strings.Common.newItems(preview.summary.newRoasts).localized(localizationManager.currentLanguage),
                     color: .orange
                 )
-                
+
                 SummaryCard(
-                    title: localizationManager.currentLanguage == "en" ? "Favorites" : "Yêu Thích",
+                    title: Strings.DataManagement.favorites.localized(localizationManager.currentLanguage),
                     value: "\(preview.summary.totalFavorites)",
-                    subtitle: localizationManager.currentLanguage == "en" ? "\(preview.summary.newFavorites) new" : "\(preview.summary.newFavorites) mới",
+                    subtitle: Strings.Common.newItems(preview.summary.newFavorites).localized(localizationManager.currentLanguage),
                     color: .red
                 )
             }
-            
+
             if preview.summary.duplicateRoasts > 0 {
                 HStack {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundColor(.orange)
-                    Text(localizationManager.currentLanguage == "en" 
-                         ? "\(preview.summary.duplicateRoasts) duplicate roasts found"
-                         : "Tìm thấy \(preview.summary.duplicateRoasts) roast trùng lặp")
+                    Text(Strings.DataManagement.Import.duplicatesFound(preview.summary.duplicateRoasts).localized(localizationManager.currentLanguage))
                         .font(.caption)
                         .foregroundColor(.orange)
                 }
@@ -167,36 +169,60 @@ struct ImportOptionsSection: View {
     @Binding var importStrategy: ImportStrategy
     @Binding var skipDuplicates: Bool
     @Binding var preserveExistingFavorites: Bool
+    @Binding var allowPartialImport: Bool
+    @Binding var maxErrorsAllowed: Int
     @EnvironmentObject var localizationManager: LocalizationManager
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "gear")
                     .foregroundColor(.purple)
-                Text(localizationManager.currentLanguage == "en" ? "Import Options" : "Tùy Chọn Nhập")
-                    .font(.headline)
-                    .fontWeight(.semibold)
+                Text(Strings.DataManagement.Import.options.localized(localizationManager.currentLanguage))
+                    .font(.headline.weight(.semibold))
             }
-            
+
             VStack(spacing: 12) {
-                Picker(localizationManager.currentLanguage == "en" ? "Import Strategy" : "Chiến lược nhập", selection: $importStrategy) {
-                    Text(localizationManager.currentLanguage == "en" ? "Merge with existing data" : "Gộp với dữ liệu hiện có")
+                Picker(Strings.DataManagement.Import.strategy.localized(localizationManager.currentLanguage), selection: $importStrategy) {
+                    Text(Strings.DataManagement.Import.mergeWithExisting.localized(localizationManager.currentLanguage))
                         .tag(ImportStrategy.merge)
-                    Text(localizationManager.currentLanguage == "en" ? "Replace all existing data" : "Thay thế toàn bộ dữ liệu")
+                    Text(Strings.DataManagement.Import.replaceAll.localized(localizationManager.currentLanguage))
                         .tag(ImportStrategy.replace)
                 }
                 .pickerStyle(SegmentedPickerStyle())
-                
+
                 if importStrategy == .merge {
                     Toggle(isOn: $skipDuplicates) {
-                        Text(localizationManager.currentLanguage == "en" ? "Skip duplicate roasts" : "Bỏ qua roast trùng lặp")
+                        Text(Strings.DataManagement.Import.skipDuplicates.localized(localizationManager.currentLanguage))
                             .font(.subheadline)
                     }
-                    
+
                     Toggle(isOn: $preserveExistingFavorites) {
-                        Text(localizationManager.currentLanguage == "en" ? "Keep existing favorites" : "Giữ danh sách yêu thích hiện có")
+                        Text(Strings.DataManagement.Import.keepExistingFavorites.localized(localizationManager.currentLanguage))
                             .font(.subheadline)
+                    }
+                }
+
+                Divider()
+
+                Toggle(isOn: $allowPartialImport) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(Strings.DataManagement.Import.allowPartialImport.localized(localizationManager.currentLanguage))
+                            .font(.subheadline)
+                        Text(Strings.DataManagement.Import.allowPartialImportDesc.localized(localizationManager.currentLanguage))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                if allowPartialImport {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(Strings.DataManagement.Import.maxErrorsAllowed(maxErrorsAllowed).localized(localizationManager.currentLanguage))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        Stepper("", value: $maxErrorsAllowed, in: 1...100)
+                            .labelsHidden()
                     }
                 }
             }
@@ -210,17 +236,16 @@ struct ImportOptionsSection: View {
 struct WarningsSection: View {
     let warnings: [ImportWarning]
     @EnvironmentObject var localizationManager: LocalizationManager
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "exclamationmark.triangle")
                     .foregroundColor(.orange)
-                Text(localizationManager.currentLanguage == "en" ? "Warnings" : "Cảnh Báo")
-                    .font(.headline)
-                    .fontWeight(.semibold)
+                Text(Strings.DataManagement.Import.warnings.localized(localizationManager.currentLanguage))
+                    .font(.headline.weight(.semibold))
             }
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(warnings.prefix(5), id: \.message) { warning in
                     HStack(alignment: .top, spacing: 8) {
@@ -233,11 +258,9 @@ struct WarningsSection: View {
                         Spacer()
                     }
                 }
-                
+
                 if warnings.count > 5 {
-                    Text(localizationManager.currentLanguage == "en" 
-                         ? "... and \(warnings.count - 5) more warnings"
-                         : "... và \(warnings.count - 5) cảnh báo khác")
+                    Text(Strings.DataManagement.Import.moreWarnings(warnings.count - 5).localized(localizationManager.currentLanguage))
                         .font(.caption2)
                         .foregroundColor(.orange)
                         .italic()
@@ -253,17 +276,16 @@ struct WarningsSection: View {
 struct PreferencesChangesSection: View {
     let changes: [String]
     @EnvironmentObject var localizationManager: LocalizationManager
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .foregroundColor(.blue)
-                Text(localizationManager.currentLanguage == "en" ? "Settings Changes" : "Thay Đổi Cài Đặt")
-                    .font(.headline)
-                    .fontWeight(.semibold)
+                Text(Strings.DataManagement.Import.settingsChanges.localized(localizationManager.currentLanguage))
+                    .font(.headline.weight(.semibold))
             }
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(changes, id: \.self) { change in
                     HStack(alignment: .top, spacing: 8) {
@@ -288,16 +310,14 @@ struct ActionButtonsSection: View {
     let onConfirm: () -> Void
     let onCancel: () -> Void
     @EnvironmentObject var localizationManager: LocalizationManager
-    
+
     var body: some View {
         VStack(spacing: 12) {
             if !isCompatible {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(.red)
-                    Text(localizationManager.currentLanguage == "en"
-                         ? "This data may not be fully compatible with the current app version."
-                         : "Dữ liệu này có thể không hoàn toàn tương thích với phiên bản ứng dụng hiện tại.")
+                    Text(Strings.DataManagement.Import.incompatibleWarning.localized(localizationManager.currentLanguage))
                         .font(.caption)
                         .foregroundColor(.red)
                 }
@@ -305,19 +325,19 @@ struct ActionButtonsSection: View {
                 .background(Color.red.opacity(0.1))
                 .cornerRadius(8)
             }
-            
+
             HStack(spacing: 12) {
                 Button(action: onCancel) {
-                    Text(localizationManager.cancel)
+                    Text(Strings.Common.cancel.localized(localizationManager.currentLanguage))
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(Color(.systemGray5))
                         .foregroundColor(.primary)
                         .cornerRadius(10)
                 }
-                
+
                 Button(action: onConfirm) {
-                    Text(localizationManager.currentLanguage == "en" ? "Import Data" : "Nhập Dữ Liệu")
+                    Text(Strings.DataManagement.Import.title.localized(localizationManager.currentLanguage))
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(isCompatible ? Color.green : Color.orange)
@@ -340,8 +360,7 @@ struct InfoRow: View {
                 .foregroundColor(.secondary)
             Spacer()
             Text(value)
-                .font(.caption)
-                .fontWeight(.medium)
+                .font(.caption.weight(.medium))
         }
     }
 }
@@ -355,8 +374,7 @@ struct SummaryCard: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.title2)
-                .fontWeight(.bold)
+                .font(.title2.weight(.bold))
                 .foregroundColor(color)
             
             Text(title)

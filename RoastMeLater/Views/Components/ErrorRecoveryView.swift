@@ -19,9 +19,8 @@ struct ErrorRecoveryView: View {
                     .font(.system(size: 50))
                     .foregroundColor(.red)
                 
-                Text(localizationManager.currentLanguage == "en" ? "Operation Failed" : "Thao Tác Thất Bại")
-                    .font(.title2)
-                    .fontWeight(.bold)
+                Text(Strings.Errors.operationFailed.localized(localizationManager.currentLanguage))
+                    .font(.title2.weight(.bold))
                 
                 Text(error.localizedDescription)
                     .font(.body)
@@ -33,9 +32,8 @@ struct ErrorRecoveryView: View {
             VStack(spacing: 8) {
                 Button(action: { showingDetails.toggle() }) {
                     HStack {
-                        Text(localizationManager.currentLanguage == "en" ? "Error Details" : "Chi Tiết Lỗi")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
+                        Text(Strings.Errors.errorDetails.localized(localizationManager.currentLanguage))
+                            .font(.subheadline.weight(.medium))
                         Spacer()
                         Image(systemName: showingDetails ? "chevron.up" : "chevron.down")
                             .font(.caption)
@@ -46,28 +44,27 @@ struct ErrorRecoveryView: View {
                 if showingDetails {
                     VStack(alignment: .leading, spacing: 8) {
                         ErrorDetailRow(
-                            label: localizationManager.currentLanguage == "en" ? "Operation" : "Thao tác",
+                            label: Strings.Errors.operation.localized(localizationManager.currentLanguage),
                             value: operationDisplayName(context.operation)
                         )
                         ErrorDetailRow(
-                            label: localizationManager.currentLanguage == "en" ? "Phase" : "Giai đoạn",
+                            label: Strings.Errors.phase.localized(localizationManager.currentLanguage),
                             value: context.phase
                         )
                         ErrorDetailRow(
-                            label: localizationManager.currentLanguage == "en" ? "Progress" : "Tiến độ",
+                            label: Strings.Errors.progress.localized(localizationManager.currentLanguage),
                             value: "\(context.itemsProcessed)/\(context.totalItems)"
                         )
                         ErrorDetailRow(
-                            label: localizationManager.currentLanguage == "en" ? "Time" : "Thời gian",
+                            label: Strings.Errors.time.localized(localizationManager.currentLanguage),
                             value: DateFormatter.localizedString(from: context.timestamp, dateStyle: .none, timeStyle: .medium)
                         )
-                        
+
                         if let managementError = error as? DataManagementError,
                            let suggestion = managementError.recoverySuggestion {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(localizationManager.currentLanguage == "en" ? "Suggestion:" : "Gợi ý:")
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
+                                Text(Strings.Errors.suggestion.localized(localizationManager.currentLanguage))
+                                    .font(.caption.weight(.semibold))
                                     .foregroundColor(.blue)
                                 Text(suggestion)
                                     .font(.caption)
@@ -85,9 +82,8 @@ struct ErrorRecoveryView: View {
             // Recovery Options
             if !recoveryOptions.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(localizationManager.currentLanguage == "en" ? "What would you like to do?" : "Bạn muốn làm gì?")
-                        .font(.headline)
-                        .fontWeight(.semibold)
+                    Text(Strings.Errors.whatToDo.localized(localizationManager.currentLanguage))
+                        .font(.headline.weight(.semibold))
                     
                     VStack(spacing: 8) {
                         ForEach(recoveryOptions.indices, id: \.self) { index in
@@ -105,7 +101,7 @@ struct ErrorRecoveryView: View {
             // Action Buttons
             HStack(spacing: 12) {
                 Button(action: onDismiss) {
-                    Text(localizationManager.cancel)
+                    Text(Strings.Common.cancel.localized(localizationManager.currentLanguage))
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(Color(.systemGray5))
@@ -147,11 +143,11 @@ struct ErrorRecoveryView: View {
     private func operationDisplayName(_ operation: DataOperation) -> String {
         switch operation {
         case .export:
-            return localizationManager.currentLanguage == "en" ? "Export Data" : "Xuất Dữ Liệu"
+            return Strings.Errors.exportData.localized(localizationManager.currentLanguage)
         case .dataImport:
-            return localizationManager.currentLanguage == "en" ? "Import Data" : "Nhập Dữ Liệu"
+            return Strings.Errors.importData.localized(localizationManager.currentLanguage)
         case .validation:
-            return localizationManager.currentLanguage == "en" ? "Data Validation" : "Xác Thực Dữ Liệu"
+            return Strings.Errors.dataValidation.localized(localizationManager.currentLanguage)
         }
     }
 }
@@ -160,7 +156,9 @@ struct RecoveryOptionCard: View {
     let option: ErrorRecoveryOption
     let isSelected: Bool
     let onSelect: () -> Void
-    
+
+    @EnvironmentObject var localizationManager: LocalizationManager
+
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
@@ -169,23 +167,22 @@ struct RecoveryOptionCard: View {
                     Circle()
                         .stroke(isSelected ? Color.blue : Color(.systemGray4), lineWidth: 2)
                         .frame(width: 20, height: 20)
-                    
+
                     if isSelected {
                         Circle()
                             .fill(Color.blue)
                             .frame(width: 12, height: 12)
                     }
                 }
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text(option.title)
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
+                            .font(.subheadline.weight(.semibold))
                             .foregroundColor(.primary)
-                        
+
                         if option.isRecommended {
-                            Text("Khuyến nghị")
+                            Text(Strings.Errors.recommended.localized(localizationManager.currentLanguage))
                                 .font(.caption2)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
@@ -193,16 +190,16 @@ struct RecoveryOptionCard: View {
                                 .foregroundColor(.blue)
                                 .cornerRadius(4)
                         }
-                        
+
                         Spacer()
                     }
-                    
+
                     Text(option.description)
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.leading)
                 }
-                
+
                 Spacer()
             }
             .padding()
@@ -229,8 +226,7 @@ struct ErrorDetailRow: View {
                 .frame(width: 80, alignment: .leading)
             
             Text(value)
-                .font(.caption)
-                .fontWeight(.medium)
+                .font(.caption.weight(.medium))
             
             Spacer()
         }

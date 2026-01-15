@@ -1,6 +1,7 @@
 import Foundation
 import RxSwift
 import RxCocoa
+import CryptoKit
 
 // MARK: - Import Options
 
@@ -9,19 +10,25 @@ struct ImportOptions {
     let validateData: Bool
     let skipDuplicates: Bool
     let preserveExistingFavorites: Bool
-    
+    let allowPartialImport: Bool
+    let maxErrorsAllowed: Int
+
     static let merge = ImportOptions(
         strategy: .merge,
         validateData: true,
         skipDuplicates: true,
-        preserveExistingFavorites: true
+        preserveExistingFavorites: true,
+        allowPartialImport: true,
+        maxErrorsAllowed: 10
     )
-    
+
     static let replace = ImportOptions(
         strategy: .replace,
         validateData: true,
         skipDuplicates: false,
-        preserveExistingFavorites: false
+        preserveExistingFavorites: false,
+        allowPartialImport: true,
+        maxErrorsAllowed: 10
     )
 }
 
@@ -39,6 +46,15 @@ struct ImportProgress {
     let itemsProcessed: Int
     let totalItems: Int
     let warnings: [ImportWarning]
+    let errors: [ImportError]
+    let successCount: Int
+    let errorCount: Int
+}
+
+struct ImportError {
+    let itemId: String
+    let message: String
+    let error: Error
 }
 
 enum ImportPhase {
@@ -96,7 +112,8 @@ enum DataImportError: Error, LocalizedError {
     case importCancelled
     case storageError(Error)
     case incompatibleData
-    
+    case tooManyErrors(Int, [ImportError])
+
     var errorDescription: String? {
         switch self {
         case .invalidFileFormat:
@@ -113,6 +130,8 @@ enum DataImportError: Error, LocalizedError {
             return "Lỗi lưu trữ: \(error.localizedDescription)"
         case .incompatibleData:
             return "Dữ liệu không tương thích với phiên bản hiện tại"
+        case .tooManyErrors(let count, _):
+            return "Quá nhiều lỗi khi import (\(count) lỗi). Đã dừng quá trình import."
         }
     }
 }
@@ -138,16 +157,19 @@ protocol DataImportServiceProtocol {
 class DataImportService: DataImportServiceProtocol {
     private let storageService: StorageServiceProtocol
     private let errorHandler: DataErrorHandlerProtocol
+    private let migrationService: DataMigrationServiceProtocol
     private let disposeBag = DisposeBag()
 
     // Supported data versions
-    private let supportedDataVersions = [1]
+    private let supportedDataVersions = [1, 2, 3, 4]
     private let currentDataVersion = 1
 
-    init(storageService: StorageServiceProtocol = StorageService(),
-         errorHandler: DataErrorHandlerProtocol = DataErrorHandler()) {
+    init(storageService: StorageServiceProtocol = StorageService.shared,
+         errorHandler: DataErrorHandlerProtocol = DataErrorHandler(),
+         migrationService: DataMigrationServiceProtocol = DataMigrationService()) {
         self.storageService = storageService
         self.errorHandler = errorHandler
+        self.migrationService = migrationService
     }
     
     func previewImport(from data: Data) -> Observable<ImportPreview> {
@@ -219,15 +241,66 @@ class DataImportService: DataImportServiceProtocol {
     private func parseImportData(_ data: Data) throws -> AppDataExport {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        
+
         do {
-            return try decoder.decode(AppDataExport.self, from: data)
+            var importData = try decoder.decode(AppDataExport.self, from: data)
+
+            // Verify checksum if present
+            if let checksum = importData.checksum {
+                try verifyChecksum(data: data, expectedChecksum: checksum, importData: importData)
+            }
+
+            // Auto-migrate if needed
+            if importData.metadata.dataVersion < currentDataVersion {
+                importData = try migrationService.migrateData(
+                    from: importData.metadata.dataVersion,
+                    to: currentDataVersion,
+                    data: importData
+                )
+            }
+
+            return importData
         } catch {
             if error is DecodingError {
                 throw DataManagementError.importInvalidFileFormat(details: error.localizedDescription)
             }
             throw DataManagementError.importCorruptedData(field: "unknown", reason: error.localizedDescription)
         }
+    }
+
+    private func verifyChecksum(data: Data, expectedChecksum: String, importData: AppDataExport) throws {
+        // Re-encode the data without checksum to verify
+        var dataWithoutChecksum = importData
+        let mirror = Mirror(reflecting: dataWithoutChecksum)
+
+        // Create a copy without checksum by re-encoding with nil checksum
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+
+        let exportDataWithoutChecksum = AppDataExport(
+            metadata: importData.metadata,
+            userPreferences: importData.userPreferences,
+            roastHistory: importData.roastHistory,
+            favorites: importData.favorites,
+            statistics: importData.statistics,
+            checksum: nil
+        )
+
+        guard let reEncodedData = try? encoder.encode(exportDataWithoutChecksum) else {
+            throw DataImportError.corruptedData("Không thể xác minh checksum")
+        }
+
+        let calculatedChecksum = calculateChecksum(data: reEncodedData)
+
+        if calculatedChecksum != expectedChecksum {
+            throw DataImportError.corruptedData("Checksum không khớp. Dữ liệu có thể đã bị thay đổi.")
+        }
+    }
+
+    private func calculateChecksum(data: Data) -> String {
+        let hash = SHA256.hash(data: data)
+        return hash.compactMap { String(format: "%02x", $0) }.joined()
     }
     
     private func createImportPreview(
@@ -337,7 +410,10 @@ class DataImportService: DataImportServiceProtocol {
                 message: "Xác thực dữ liệu...",
                 itemsProcessed: 0,
                 totalItems: 0,
-                warnings: []
+                warnings: [],
+                errors: [],
+                successCount: 0,
+                errorCount: 0
             ))
 
             let importData = try parseImportData(data)
@@ -364,7 +440,10 @@ class DataImportService: DataImportServiceProtocol {
                 message: "Phân tích dữ liệu...",
                 itemsProcessed: 0,
                 totalItems: totalItems,
-                warnings: []
+                warnings: [],
+                errors: [],
+                successCount: 0,
+                errorCount: 0
             ))
 
             let existingRoasts = storageService.getRoastHistory()
@@ -387,7 +466,10 @@ class DataImportService: DataImportServiceProtocol {
                 message: "Xử lý cài đặt...",
                 itemsProcessed: 0,
                 totalItems: totalItems,
-                warnings: []
+                warnings: [],
+                errors: [],
+                successCount: 0,
+                errorCount: 0
             ))
 
             // Import preferences
@@ -400,7 +482,10 @@ class DataImportService: DataImportServiceProtocol {
                 message: "Xử lý lịch sử roast...",
                 itemsProcessed: 1,
                 totalItems: totalItems,
-                warnings: []
+                warnings: [],
+                errors: [],
+                successCount: 0,
+                errorCount: 0
             ))
 
             // Clear existing data if replace strategy
@@ -409,10 +494,44 @@ class DataImportService: DataImportServiceProtocol {
                 storageService.saveUserPreferences(importData.userPreferences)
             }
 
-            // Import roasts
+            // Import roasts with partial import support
             var processedRoasts = 0
+            var successCount = 0
+            var errorCount = 0
+            var errors: [ImportError] = []
+            var warnings: [ImportWarning] = []
+
             for roast in roastsToImport {
-                storageService.saveRoast(roast)
+                do {
+                    // Validate individual roast if needed
+                    if options.validateData {
+                        try validateRoast(roast)
+                    }
+
+                    storageService.saveRoast(roast)
+                    successCount += 1
+                } catch {
+                    errorCount += 1
+                    let importError = ImportError(
+                        itemId: roast.id.uuidString,
+                        message: "Lỗi khi import roast: \(error.localizedDescription)",
+                        error: error
+                    )
+                    errors.append(importError)
+
+                    // Check if we should continue or abort
+                    if !options.allowPartialImport || errorCount > options.maxErrorsAllowed {
+                        throw DataImportError.tooManyErrors(errorCount, errors)
+                    }
+
+                    // Add warning for this failed item
+                    warnings.append(ImportWarning(
+                        type: .missingField,
+                        message: "Bỏ qua roast do lỗi: \(error.localizedDescription)",
+                        itemId: roast.id.uuidString
+                    ))
+                }
+
                 processedRoasts += 1
 
                 // Update progress periodically
@@ -420,10 +539,13 @@ class DataImportService: DataImportServiceProtocol {
                     observer.onNext(ImportProgress(
                         phase: .processingRoasts,
                         progress: 0.3 + (Double(processedRoasts) / Double(roastsToImport.count)) * 0.4,
-                        message: "Đã xử lý \(processedRoasts)/\(roastsToImport.count) roast...",
+                        message: "Đã xử lý \(processedRoasts)/\(roastsToImport.count) roast (\(successCount) thành công, \(errorCount) lỗi)...",
                         itemsProcessed: processedRoasts + 1,
                         totalItems: totalItems,
-                        warnings: []
+                        warnings: warnings,
+                        errors: errors,
+                        successCount: successCount,
+                        errorCount: errorCount
                     ))
                 }
             }
@@ -435,7 +557,10 @@ class DataImportService: DataImportServiceProtocol {
                 message: "Xử lý danh sách yêu thích...",
                 itemsProcessed: processedRoasts + 1,
                 totalItems: totalItems,
-                warnings: []
+                warnings: warnings,
+                errors: errors,
+                successCount: successCount,
+                errorCount: errorCount
             ))
 
             // Update favorite status for imported roasts
@@ -460,32 +585,52 @@ class DataImportService: DataImportServiceProtocol {
                 message: "Lưu dữ liệu...",
                 itemsProcessed: totalItems,
                 totalItems: totalItems,
-                warnings: []
+                warnings: warnings,
+                errors: errors,
+                successCount: successCount,
+                errorCount: errorCount
             ))
 
             // Force save and refresh
             // The individual saves above should have already persisted the data
 
             // Phase 7: Completed
+            let finalMessage = errorCount > 0
+                ? "Nhập dữ liệu hoàn tất: \(successCount) thành công, \(errorCount) lỗi"
+                : "Nhập dữ liệu thành công!"
+
             observer.onNext(ImportProgress(
                 phase: .completed,
                 progress: 1.0,
-                message: "Nhập dữ liệu thành công!",
+                message: finalMessage,
                 itemsProcessed: totalItems,
                 totalItems: totalItems,
-                warnings: []
+                warnings: warnings,
+                errors: errors,
+                successCount: successCount,
+                errorCount: errorCount
             ))
 
             observer.onCompleted()
 
         } catch {
+            let errorList: [ImportError]
+            if case .tooManyErrors(_, let errors) = error as? DataImportError {
+                errorList = errors
+            } else {
+                errorList = []
+            }
+
             observer.onNext(ImportProgress(
                 phase: .failed(error),
                 progress: 0.0,
                 message: error.localizedDescription,
                 itemsProcessed: 0,
                 totalItems: 0,
-                warnings: []
+                warnings: [],
+                errors: errorList,
+                successCount: 0,
+                errorCount: errorList.count
             ))
             observer.onError(error)
         }
@@ -541,5 +686,25 @@ class DataImportService: DataImportServiceProtocol {
         }
 
         return errors
+    }
+
+    private func validateRoast(_ roast: Roast) throws {
+        if roast.content.isEmpty {
+            throw DataImportError.validationFailed([
+                ValidationError(field: "content", value: roast.content, reason: "Nội dung roast không được để trống")
+            ])
+        }
+
+        if roast.spiceLevel < 1 || roast.spiceLevel > 5 {
+            throw DataImportError.validationFailed([
+                ValidationError(field: "spiceLevel", value: roast.spiceLevel, reason: "Mức độ cay phải từ 1 đến 5")
+            ])
+        }
+
+        if roast.createdAt > Date().addingTimeInterval(86400) {
+            throw DataImportError.validationFailed([
+                ValidationError(field: "createdAt", value: roast.createdAt, reason: "Ngày tạo không được ở tương lai")
+            ])
+        }
     }
 }

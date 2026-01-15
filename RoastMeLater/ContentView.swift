@@ -9,48 +9,42 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var selectedTab = 0
-    @StateObject private var localizationManager = LocalizationManager.shared
+    @EnvironmentObject var localizationManager: LocalizationManager
 
     var body: some View {
         TabView(selection: $selectedTab) {
+            // Tab 0: Roast Generator
             RoastGeneratorView()
                 .tabItem {
                     Image(systemName: "flame.fill")
-                    Text("Roast")
+                    Text(localizationManager.tabRoast)
                 }
                 .tag(0)
 
-            RoastHistoryView(onNavigateToRoastGenerator: {
+            // Tab 1: Library (merged History + Favorites)
+            LibraryView(onNavigateToRoastGenerator: {
                 selectedTab = 0
             })
                 .tabItem {
-                    Image(systemName: "clock.fill")
-                    Text(localizationManager.tabHistory)
+                    Image(systemName: "books.vertical.fill")
+                    Text(localizationManager.tabLibrary)
                 }
                 .tag(1)
 
-            FavoritesView(onNavigateToRoastGenerator: {
-                selectedTab = 0
-            })
-                .tabItem {
-                    Image(systemName: "heart.fill")
-                    Text(localizationManager.tabFavorites)
-                }
-                .tag(2)
-
+            // Tab 2: Settings
             SettingsView()
                 .tabItem {
-                    Image(systemName: "gear")
+                    Image(systemName: "gearshape.fill")
                     Text(localizationManager.tabSettings)
                 }
-                .tag(3)
+                .tag(2)
         }
-        .environmentObject(localizationManager)
         .accentColor(.orange)
     }
 }
 
 #Preview {
     ContentView()
+        .environmentObject(LocalizationManager.shared)
 }
 

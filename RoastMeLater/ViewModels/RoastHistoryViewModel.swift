@@ -32,26 +32,57 @@ class RoastHistoryViewModel: ObservableObject {
         return errorSubject.asObservable()
     }
     
-    // MARK: - Computed Properties
+    // MARK: - Cached Computed Properties
+    private var cachedFavoriteRoasts: [Roast] = []
+    private var cachedRoastsByCategory: [RoastCategory: [Roast]] = [:]
+    private var cachedMostUsedCategory: RoastCategory?
+    private var lastCacheUpdate: Date?
+
     var totalRoasts: Int {
         return roasts.count
     }
-    
+
     var favoriteRoasts: [Roast] {
-        return roasts.filter { $0.isFavorite }
+        if shouldRecalculateCache() {
+            updateCache()
+        }
+        return cachedFavoriteRoasts
     }
-    
+
     var roastsByCategory: [RoastCategory: [Roast]] {
-        return Dictionary(grouping: roasts) { $0.category }
+        if shouldRecalculateCache() {
+            updateCache()
+        }
+        return cachedRoastsByCategory
     }
-    
+
     var mostUsedCategory: RoastCategory? {
-        let categoryCount = roastsByCategory.mapValues { $0.count }
-        return categoryCount.max(by: { $0.value < $1.value })?.key
+        if shouldRecalculateCache() {
+            updateCache()
+        }
+        return cachedMostUsedCategory
+    }
+
+    private func shouldRecalculateCache() -> Bool {
+        guard let lastUpdate = lastCacheUpdate else { return true }
+        // Recalculate if cache is older than 1 second or roasts changed
+        return Date().timeIntervalSince(lastUpdate) > 1.0
+    }
+
+    private func updateCache() {
+        PerformanceMonitor.shared.measure(operation: "RoastHistoryViewModel.updateCache") {
+            cachedFavoriteRoasts = roasts.filter { $0.isFavorite }
+            cachedRoastsByCategory = Dictionary(grouping: roasts) { $0.category }
+
+            let categoryCount = cachedRoastsByCategory.mapValues { $0.count }
+            cachedMostUsedCategory = categoryCount.max(by: { $0.value < $1.value })?.key
+
+            lastCacheUpdate = Date()
+        }
     }
     
     // MARK: - Initialization
-    init(storageService: StorageServiceProtocol = StorageService()) {
+    init(storageService: StorageServiceProtocol = StorageService.shared) {
         self.storageService = storageService
         setupBindings()
         loadRoasts()
@@ -66,6 +97,8 @@ class RoastHistoryViewModel: ObservableObject {
                 .subscribe(onNext: { [weak self] roasts in
                     self?.roasts = roasts
                     self?.roastsSubject.onNext(roasts)
+                    // Invalidate cache when roasts change
+                    self?.lastCacheUpdate = nil
                 })
                 .disposed(by: disposeBag)
         }

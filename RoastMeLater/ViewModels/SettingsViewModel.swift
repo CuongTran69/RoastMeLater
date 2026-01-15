@@ -3,12 +3,14 @@ import RxSwift
 import RxCocoa
 import UIKit
 import UniformTypeIdentifiers
+import Combine
 
 class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     // MARK: - Published Properties
     @Published var notificationsEnabled = true
     @Published var notificationFrequency: NotificationFrequency = .hourly
     @Published var defaultSpiceLevel = 3
+    @Published var defaultCategory: RoastCategory = .general
     @Published var safetyFiltersEnabled = true
     @Published var preferredLanguage = "vi"
     @Published var preferredCategories: [RoastCategory] = RoastCategory.allCases
@@ -16,7 +18,9 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     // API Configuration
     @Published var apiKey = ""
     @Published var baseURL = ""
+    @Published var modelName = ""
     @Published var apiTestResult: Bool?
+    @Published var isTestingConnection = false
 
     // Export/Import State
     @Published var isExporting = false
@@ -34,10 +38,8 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     @Published var complianceIssues: [ComplianceIssue] = []
     @Published var currentExportOptions: ExportOptions?
 
-    // Model cố định - không cần @Published
-    var modelName: String {
-        return Constants.API.fixedModel
-    }
+    // Export file URL tracking
+    private var pendingExportURL: URL?
 
     // Statistics
     @Published var totalRoastsGenerated = 0
@@ -50,21 +52,22 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     private let dataExportService: DataExportServiceProtocol
     private let dataImportService: DataImportServiceProtocol
     private let disposeBag = DisposeBag()
-    
+    private var cancellables = Set<AnyCancellable>()
+
     // MARK: - Reactive Properties
     private let preferencesSubject = BehaviorSubject<UserPreferences>(value: UserPreferences())
     private let statisticsSubject = BehaviorSubject<SettingsStatistics>(value: SettingsStatistics())
-    
+
     var preferences: Observable<UserPreferences> {
         return preferencesSubject.asObservable()
     }
-    
+
     var statistics: Observable<SettingsStatistics> {
         return statisticsSubject.asObservable()
     }
-    
+
     // MARK: - Initialization
-    init(storageService: StorageServiceProtocol = StorageService(),
+    init(storageService: StorageServiceProtocol = StorageService.shared,
          aiService: AIServiceProtocol = AIService(),
          dataExportService: DataExportServiceProtocol? = nil,
          dataImportService: DataImportServiceProtocol? = nil) {
@@ -75,24 +78,61 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
         super.init()
         setupBindings()
         loadSettings()
+        setupNotificationObservers()
 
         // Force update API configuration on init
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             self.updateAPIConfiguration()
         }
     }
+
+    // Flag to prevent infinite loop when reloading from storage
+    private var isReloadingFromStorage = false
+
+    private func setupNotificationObservers() {
+        // Listen for settings changes from RoastGeneratorView to sync spice level and category
+        NotificationCenter.default.publisher(for: .settingsDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                // Only reload if notification came from RoastGeneratorViewModel (not from self)
+                guard notification.object as? SettingsViewModel !== self else { return }
+                self?.reloadFromStorage()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func reloadFromStorage() {
+        isReloadingFromStorage = true
+
+        let preferences = storageService.getUserPreferences()
+
+        // Update preferencesSubject to trigger updatePublishedProperties
+        // This ensures all @Published properties are updated correctly
+        preferencesSubject.onNext(preferences)
+
+        print("🔄 SettingsViewModel reloadFromStorage:")
+        print("  defaultSpiceLevel: \(preferences.defaultSpiceLevel)")
+        print("  defaultCategory: \(preferences.defaultCategory.displayName)")
+
+        // Reset flag after a short delay to allow UI to update
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.isReloadingFromStorage = false
+        }
+    }
     
     // MARK: - Private Methods
     private func setupBindings() {
         // Observe preferences changes and save automatically
+        // Skip saving when reloading from storage to prevent unnecessary writes
         preferences
             .skip(1) // Skip initial value
             .debounce(.milliseconds(500), scheduler: MainScheduler.instance)
             .subscribe(onNext: { [weak self] preferences in
-                self?.storageService.saveUserPreferences(preferences)
+                guard let self = self, !self.isReloadingFromStorage else { return }
+                self.storageService.saveUserPreferences(preferences)
             })
             .disposed(by: disposeBag)
-        
+
         // Update published properties when preferences change
         preferences
             .observe(on: MainScheduler.instance)
@@ -100,7 +140,7 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
                 self?.updatePublishedProperties(from: preferences)
             })
             .disposed(by: disposeBag)
-        
+
         // Update statistics when they change
         statistics
             .observe(on: MainScheduler.instance)
@@ -116,6 +156,7 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
         notificationsEnabled = preferences.notificationsEnabled
         notificationFrequency = preferences.notificationFrequency
         defaultSpiceLevel = preferences.defaultSpiceLevel
+        defaultCategory = preferences.defaultCategory
         safetyFiltersEnabled = preferences.safetyFiltersEnabled
         preferredLanguage = preferences.preferredLanguage
         preferredCategories = preferences.preferredCategories
@@ -123,6 +164,7 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
         // API Configuration
         apiKey = preferences.apiConfiguration.apiKey
         baseURL = preferences.apiConfiguration.baseURL
+        modelName = preferences.apiConfiguration.modelName
     }
     
     // MARK: - Public Methods
@@ -172,15 +214,52 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     }
     
     func updateDefaultSpiceLevel(_ level: Int) {
+        // Skip if this is triggered by reloadFromStorage to prevent loop
+        guard !isReloadingFromStorage else { return }
+
+        // Skip if value hasn't changed
+        guard defaultSpiceLevel != level else { return }
+
         defaultSpiceLevel = level
         updatePreferences { preferences in
             preferences.defaultSpiceLevel = level
         }
 
-        // Notify other ViewModels about settings change
-        NotificationCenter.default.post(name: .settingsDidChange, object: nil)
+        // Save immediately to storage for sync (bypass debounce)
+        saveCurrentPreferencesImmediately()
+
+        // Notify other ViewModels about settings change (pass self to identify source)
+        NotificationCenter.default.post(name: .settingsDidChange, object: self)
     }
-    
+
+    func updateDefaultCategory(_ category: RoastCategory) {
+        // Skip if this is triggered by reloadFromStorage to prevent loop
+        guard !isReloadingFromStorage else { return }
+
+        // Skip if value hasn't changed
+        guard defaultCategory != category else { return }
+
+        defaultCategory = category
+        updatePreferences { preferences in
+            preferences.defaultCategory = category
+        }
+
+        // Save immediately to storage for sync (bypass debounce)
+        saveCurrentPreferencesImmediately()
+
+        // Notify other ViewModels about settings change (pass self to identify source)
+        NotificationCenter.default.post(name: .settingsDidChange, object: self)
+    }
+
+    private func saveCurrentPreferencesImmediately() {
+        do {
+            let currentPreferences = try preferencesSubject.value()
+            storageService.saveUserPreferences(currentPreferences)
+        } catch {
+            print("Error saving preferences immediately: \(error)")
+        }
+    }
+
     func updateSafetyFilters(_ enabled: Bool) {
         safetyFiltersEnabled = enabled
         updatePreferences { preferences in
@@ -310,17 +389,25 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
                 let date2 = (try? file2.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? Date.distantPast
                 return date1 < date2
             }) {
-                DispatchQueue.main.async {
-                    let activityVC = UIActivityViewController(activityItems: [latestFile], applicationActivities: nil)
-
-                    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                       let window = windowScene.windows.first {
-                        window.rootViewController?.present(activityVC, animated: true)
-                    }
-                }
+                pendingExportURL = latestFile
+                showExportLocationPicker()
             }
         } catch {
             print("Failed to find export file: \(error)")
+        }
+    }
+
+    private func showExportLocationPicker() {
+        guard let exportURL = pendingExportURL else { return }
+
+        DispatchQueue.main.async {
+            let documentPicker = UIDocumentPickerViewController(forExporting: [exportURL], asCopy: true)
+            documentPicker.delegate = self
+
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = windowScene.windows.first {
+                window.rootViewController?.present(documentPicker, animated: true)
+            }
         }
     }
 
@@ -394,7 +481,10 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
                         message: error.localizedDescription,
                         itemsProcessed: 0,
                         totalItems: 0,
-                        warnings: []
+                        warnings: [],
+                        errors: [],
+                        successCount: 0,
+                        errorCount: 0
                     )
                     print("Import failed: \(error)")
                 }
@@ -412,6 +502,15 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard let url = urls.first else { return }
 
+        // Check if this is an export operation (user selected save location)
+        if pendingExportURL != nil {
+            // Export completed successfully
+            pendingExportURL = nil
+            showExportSuccess = true
+            return
+        }
+
+        // Otherwise, this is an import operation
         // Start security-scoped resource access
         guard url.startAccessingSecurityScopedResource() else {
             print("Failed to access security-scoped resource")
@@ -426,17 +525,37 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
         previewImportData(from: url)
     }
 
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        // Clean up if export was cancelled
+        if let exportURL = pendingExportURL {
+            // Optionally delete the temporary export file
+            try? FileManager.default.removeItem(at: exportURL)
+            pendingExportURL = nil
+        }
+    }
+
     // MARK: - API Configuration Methods
     func updateAPIConfiguration() {
         print("🔧 Updating API Configuration:")
         print("  apiKey: \(apiKey.isEmpty ? "EMPTY" : "HAS_VALUE")")
         print("  baseURL: \(baseURL)")
+        print("  modelName: \(modelName)")
 
         updatePreferences { preferences in
             preferences.apiConfiguration = APIConfiguration(
                 apiKey: apiKey,
-                baseURL: baseURL
+                baseURL: baseURL,
+                modelName: modelName
             )
+        }
+
+        // Force save immediately (don't wait for debounce)
+        do {
+            let currentPreferences = try preferencesSubject.value()
+            storageService.saveUserPreferences(currentPreferences)
+            print("✅ API Configuration saved to storage immediately")
+        } catch {
+            print("❌ Failed to save API configuration: \(error)")
         }
 
         print("✅ API Configuration updated")
@@ -445,26 +564,44 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     func clearAPIConfiguration() {
         apiKey = ""
         baseURL = ""
+        modelName = ""
         apiTestResult = nil
         updateAPIConfiguration()
     }
 
     func testAPIConnection() {
+        print("🧪 Testing API Connection...")
+        print("  API Key: \(apiKey.isEmpty ? "EMPTY" : "HAS_VALUE (\(apiKey.count) chars)")")
+        print("  Base URL: \(baseURL.isEmpty ? "EMPTY" : baseURL)")
+        print("  Model: \(modelName)")
+
         guard !apiKey.isEmpty, !baseURL.isEmpty else {
+            print("❌ Validation failed: API Key or Base URL is empty")
             apiTestResult = false
             return
         }
+
+        print("✅ Validation passed, calling AIService...")
+
+        // Reset previous result and show loading
+        apiTestResult = nil
+        isTestingConnection = true
 
         aiService.testAPIConnection(apiKey: apiKey, baseURL: baseURL, modelName: modelName)
             .observe(on: MainScheduler.instance)
             .subscribe(
                 onNext: { [weak self] success in
+                    print("📡 API Test Result: \(success ? "SUCCESS" : "FAILED")")
+                    self?.isTestingConnection = false
                     self?.apiTestResult = success
                     if success {
+                        print("💾 Saving API configuration...")
                         self?.updateAPIConfiguration()
                     }
                 },
-                onError: { [weak self] _ in
+                onError: { [weak self] error in
+                    print("❌ API Test Error: \(error.localizedDescription)")
+                    self?.isTestingConnection = false
                     self?.apiTestResult = false
                 }
             )

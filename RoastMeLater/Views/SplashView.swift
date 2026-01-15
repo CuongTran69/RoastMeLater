@@ -53,8 +53,7 @@ struct SplashView: View {
                     // App title
                     VStack(spacing: 12) {
                         Text("RoastMe Generator")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
+                            .font(.largeTitle.weight(.bold))
                             .foregroundColor(.primary)
                             .opacity(textOpacity)
                         
@@ -63,8 +62,7 @@ struct SplashView: View {
                             Text("🎯")
                                 .font(.title2)
                             Text("Tạo câu roast hài hước để giải tỏa stress công việc")
-                                .font(.headline)
-                                .fontWeight(.medium)
+                                .font(.headline.weight(.medium))
                                 .foregroundColor(.orange)
                                 .multilineTextAlignment(.center)
                             Text("🎯")
