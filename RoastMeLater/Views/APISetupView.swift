@@ -7,10 +7,9 @@ struct APISetupView: View {
 
     // Computed property to check if form is valid
     private var isFormValid: Bool {
-        !viewModel.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !viewModel.baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        viewModel.isAPIFormValid
     }
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 24) {
@@ -19,19 +18,19 @@ struct APISetupView: View {
                     Image(systemName: "key.fill")
                         .font(.system(size: 60))
                         .foregroundColor(.orange)
-                    
+
                     Text("Cấu Hình API")
                         .font(.largeTitle.weight(.bold))
-                    
+
                     Text("Để tạo roast, bạn cần cung cấp API key từ dịch vụ AI tương thích OpenAI")
                         .font(.body)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                 }
-                
+
                 Spacer()
-                
+
                 // Form
                 VStack(spacing: 20) {
                     VStack(alignment: .leading, spacing: 8) {
@@ -41,19 +40,34 @@ struct APISetupView: View {
                             Text("*")
                                 .foregroundColor(.red)
                         }
-                        
+
                         SecureField("sk-xxxxxxxxxxxxxxxx", text: $viewModel.apiKey)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .font(.system(.body, design: .monospaced))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(viewModel.apiKeyError != nil ? Color.red : Color.clear, lineWidth: 1)
+                            )
                             .onChange(of: viewModel.apiKey) { newValue in
                                 print("📝 API Key changed: \(newValue.isEmpty ? "EMPTY" : "HAS_VALUE (\(newValue.count) chars)")")
+                                viewModel.validateAPIKey()
                             }
-                        
-                        Text("API key từ OpenAI, Anthropic, hoặc dịch vụ tương thích")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+
+                        if let error = viewModel.apiKeyError {
+                            HStack(spacing: 4) {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                    .font(.caption)
+                                Text(error)
+                                    .font(.caption)
+                            }
+                            .foregroundColor(.red)
+                        } else {
+                            Text("API key từ OpenAI, Anthropic, hoặc dịch vụ tương thích")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
-                    
+
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Base URL")
@@ -61,21 +75,36 @@ struct APISetupView: View {
                             Text("*")
                                 .foregroundColor(.red)
                         }
-                        
+
                         TextField("https://api.openai.com/v1/chat/completions", text: $viewModel.baseURL)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
                             .font(.system(.body, design: .monospaced))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(viewModel.baseURLError != nil ? Color.red : Color.clear, lineWidth: 1)
+                            )
                             .onChange(of: viewModel.baseURL) { newValue in
                                 print("📝 Base URL changed: \(newValue.isEmpty ? "EMPTY" : newValue)")
+                                viewModel.validateBaseURL()
                             }
-                        
-                        Text("Endpoint API của dịch vụ AI")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+
+                        if let error = viewModel.baseURLError {
+                            HStack(spacing: 4) {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                    .font(.caption)
+                                Text(error)
+                                    .font(.caption)
+                            }
+                            .foregroundColor(.red)
+                        } else {
+                            Text("Endpoint API của dịch vụ AI")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
-                    
+
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Model")
                             .font(.headline.weight(.semibold))
@@ -85,13 +114,28 @@ struct APISetupView: View {
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
                             .font(.system(.body, design: .monospaced))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(viewModel.modelNameError != nil ? Color.red : Color.clear, lineWidth: 1)
+                            )
                             .onChange(of: viewModel.modelName) { newValue in
                                 print("📝 Model changed: \(newValue.isEmpty ? "EMPTY" : newValue)")
+                                viewModel.validateModelName()
                             }
 
-                        Text("Model được sử dụng để tạo roast (mặc định: gemini:gemini-2.5-pro)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        if let error = viewModel.modelNameError {
+                            HStack(spacing: 4) {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                    .font(.caption)
+                                Text(error)
+                                    .font(.caption)
+                            }
+                            .foregroundColor(.red)
+                        } else {
+                            Text("Model được sử dụng để tạo roast (mặc định: gemini:gemini-2.5-pro)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
                 .padding(.horizontal)

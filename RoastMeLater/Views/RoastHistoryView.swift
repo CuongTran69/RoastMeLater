@@ -75,12 +75,24 @@ struct RoastHistoryView: View {
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
+                            .accessibilityLabel(localizationManager.currentLanguage == "en" ? "More options" : "Tùy chọn khác")
+                            .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to show more options" : "Nhấn đúp để hiển thị thêm tùy chọn")
                     }
                 }
             }
         }
         .sheet(isPresented: $showingFilterSheet) {
             FilterSheetView(selectedCategory: $selectedCategory)
+        }
+        .alert(
+            localizationManager.currentLanguage == "en" ? "Error" : "Lỗi",
+            isPresented: $viewModel.showError
+        ) {
+            Button(localizationManager.currentLanguage == "en" ? "OK" : "Đồng ý", role: .cancel) {
+                viewModel.showError = false
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? (localizationManager.currentLanguage == "en" ? "An error occurred" : "Có lỗi xảy ra"))
         }
         .onAppear {
             viewModel.loadRoasts()
@@ -184,6 +196,7 @@ struct RoastHistoryRowView: View {
                 Image(systemName: roast.category.icon)
                     .foregroundColor(.orange)
                     .frame(width: 20)
+                    .accessibilityHidden(true)
 
                 Text(localizationManager.categoryName(roast.category))
                     .font(.caption)
@@ -198,6 +211,8 @@ struct RoastHistoryRowView: View {
                             .foregroundColor(.orange)
                     }
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(localizationManager.currentLanguage == "en" ? "Spice level \(roast.spiceLevel) of 5" : "Độ cay \(roast.spiceLevel) trên 5")
 
                 Text(formatTimeOnly(roast.createdAt))
                     .font(.caption)
@@ -222,6 +237,12 @@ struct RoastHistoryRowView: View {
                         .font(.title3)
                 }
                 .buttonStyle(PlainButtonStyle())
+                .accessibilityLabel(roast.isFavorite
+                    ? (localizationManager.currentLanguage == "en" ? "Remove from favorites" : "Xóa khỏi yêu thích")
+                    : (localizationManager.currentLanguage == "en" ? "Add to favorites" : "Thêm vào yêu thích"))
+                .accessibilityHint(roast.isFavorite
+                    ? (localizationManager.currentLanguage == "en" ? "Double tap to remove from favorites" : "Nhấn đúp để xóa khỏi yêu thích")
+                    : (localizationManager.currentLanguage == "en" ? "Double tap to add to favorites" : "Nhấn đúp để thêm vào yêu thích"))
 
                 Button(action: {
                     let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
@@ -233,9 +254,12 @@ struct RoastHistoryRowView: View {
                         .font(.title3)
                 }
                 .buttonStyle(PlainButtonStyle())
+                .accessibilityLabel(localizationManager.currentLanguage == "en" ? "Delete roast" : "Xóa roast")
+                .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to delete this roast" : "Nhấn đúp để xóa roast này")
             }
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .contain)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(action: onDelete) {
                 Label(Strings.Common.delete.localized(localizationManager.currentLanguage), systemImage: "trash")
@@ -268,8 +292,9 @@ struct EmptyHistoryView: View {
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "clock.badge.questionmark")
-                .font(.system(size: 60))
+                .font(.largeTitle)
                 .foregroundColor(.gray.opacity(0.5))
+                .accessibilityHidden(true)
 
             Text(Strings.History.emptyTitle.localized(localizationManager.currentLanguage))
                 .font(.title2.weight(.semibold))
@@ -297,8 +322,11 @@ struct EmptyHistoryView: View {
                 )
                 .cornerRadius(12)
             }
+            .accessibilityLabel(Strings.History.createNewRoast.localized(localizationManager.currentLanguage))
+            .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to create a new roast" : "Nhấn đúp để tạo roast mới")
         }
         .padding()
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -325,6 +353,9 @@ struct FilterSheetView: View {
                         }
                     }
                     .foregroundColor(.primary)
+                    .accessibilityLabel(Strings.Favorites.allCategories.localized(localizationManager.currentLanguage))
+                    .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to show all categories" : "Nhấn đúp để hiển thị tất cả danh mục")
+                    .accessibilityAddTraits(selectedCategory == nil ? .isSelected : [])
 
                     ForEach(RoastCategory.allCases, id: \.self) { category in
                         Button(action: {
@@ -347,6 +378,9 @@ struct FilterSheetView: View {
                             }
                         }
                         .foregroundColor(.primary)
+                        .accessibilityLabel(localizationManager.categoryName(category))
+                        .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to filter by this category" : "Nhấn đúp để lọc theo danh mục này")
+                        .accessibilityAddTraits(selectedCategory == category ? .isSelected : [])
                     }
                 }
             }
@@ -357,6 +391,8 @@ struct FilterSheetView: View {
                     Button(Strings.Common.done.localized(localizationManager.currentLanguage)) {
                         dismiss()
                     }
+                    .accessibilityLabel(Strings.Common.done.localized(localizationManager.currentLanguage))
+                    .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to close filter" : "Nhấn đúp để đóng bộ lọc")
                 }
             }
         }

@@ -7,7 +7,7 @@ struct FavoritesView: View {
     let onNavigateToRoastGenerator: () -> Void
     @State private var showingShareSheet = false
     @State private var shareText = ""
-    
+
     var body: some View {
         NavigationView {
             VStack {
@@ -40,12 +40,24 @@ struct FavoritesView: View {
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
+                            .accessibilityLabel(localizationManager.currentLanguage == "en" ? "More options" : "Tùy chọn khác")
+                            .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to show more options" : "Nhấn đúp để hiển thị thêm tùy chọn")
                     }
                 }
             }
         }
         .sheet(isPresented: $showingShareSheet) {
             ShareSheet(activityItems: [shareText])
+        }
+        .alert(
+            localizationManager.currentLanguage == "en" ? "Error" : "Lỗi",
+            isPresented: $viewModel.showError
+        ) {
+            Button(localizationManager.currentLanguage == "en" ? "OK" : "Đồng ý", role: .cancel) {
+                viewModel.showError = false
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? (localizationManager.currentLanguage == "en" ? "An error occurred" : "Có lỗi xảy ra"))
         }
         .onAppear {
             viewModel.loadFavorites()
@@ -111,6 +123,7 @@ struct FavoriteRoastRowView: View {
                 Image(systemName: roast.category.icon)
                     .foregroundColor(.orange)
                     .frame(width: 20)
+                    .accessibilityHidden(true)
 
                 Text(localizationManager.categoryName(roast.category))
                     .font(.caption)
@@ -125,6 +138,8 @@ struct FavoriteRoastRowView: View {
                             .foregroundColor(.orange)
                     }
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(localizationManager.currentLanguage == "en" ? "Spice level \(roast.spiceLevel) of 5" : "Độ cay \(roast.spiceLevel) trên 5")
             }
 
             Text(roast.content)
@@ -141,16 +156,23 @@ struct FavoriteRoastRowView: View {
 
                 Button(action: onShare) {
                     Image(systemName: "square.and.arrow.up")
+                        .font(.body)
                         .foregroundColor(.blue)
                 }
+                .accessibilityLabel(localizationManager.currentLanguage == "en" ? "Share roast" : "Chia sẻ roast")
+                .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to share this roast" : "Nhấn đúp để chia sẻ roast này")
 
                 Button(action: onFavoriteToggle) {
                     Image(systemName: "heart.fill")
+                        .font(.body)
                         .foregroundColor(.red)
                 }
+                .accessibilityLabel(localizationManager.currentLanguage == "en" ? "Remove from favorites" : "Xóa khỏi yêu thích")
+                .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to remove from favorites" : "Nhấn đúp để xóa khỏi yêu thích")
             }
         }
         .padding(.vertical, 8)
+        .accessibilityElement(children: .contain)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(action: onFavoriteToggle) {
                 Label(Strings.Favorites.removeFromFavorites.localized(localizationManager.currentLanguage), systemImage: "heart.slash")
@@ -172,8 +194,9 @@ struct EmptyFavoritesView: View {
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "heart.slash")
-                .font(.system(size: 60))
+                .font(.largeTitle)
                 .foregroundColor(.gray.opacity(0.5))
+                .accessibilityHidden(true)
 
             Text(Strings.Favorites.emptyTitle.localized(localizationManager.currentLanguage))
                 .font(.title2.weight(.semibold))
@@ -202,7 +225,10 @@ struct EmptyFavoritesView: View {
                 )
                 .cornerRadius(12)
             }
+            .accessibilityLabel(Strings.Favorites.createNewRoast.localized(localizationManager.currentLanguage))
+            .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to create a new roast" : "Nhấn đúp để tạo roast mới")
         }
         .padding()
+        .accessibilityElement(children: .contain)
     }
 }

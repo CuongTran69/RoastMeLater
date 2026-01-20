@@ -147,7 +147,49 @@ class MockStorageService: StorageServiceProtocol {
         preferencesToReturn = backup.preferences
         return true
     }
-    
+
+    // MARK: - User Streak Methods
+
+    var userStreakToReturn: UserStreak?
+    var saveUserStreakCalled = false
+
+    func saveUserStreak(_ streak: UserStreak) {
+        saveUserStreakCalled = true
+        userStreakToReturn = streak
+    }
+
+    func getUserStreak() -> UserStreak? {
+        return userStreakToReturn
+    }
+
+    // MARK: - Widget Data Methods
+
+    var widgetDataToReturn: WidgetRoastData?
+    var saveWidgetDataCalled = false
+    var updateWidgetWithLatestRoastCalled = false
+
+    func saveWidgetData(_ data: WidgetRoastData) {
+        saveWidgetDataCalled = true
+        widgetDataToReturn = data
+    }
+
+    func getWidgetData() -> WidgetRoastData? {
+        return widgetDataToReturn
+    }
+
+    func updateWidgetWithLatestRoast(_ roast: Roast, streak: Int) {
+        updateWidgetWithLatestRoastCalled = true
+        let widgetData = WidgetRoastData(
+            roastOfTheDay: roast.content,
+            category: roast.category.rawValue,
+            categoryIcon: roast.category.icon,
+            spiceLevel: roast.spiceLevel,
+            generatedDate: roast.createdAt,
+            currentStreak: streak
+        )
+        saveWidgetData(widgetData)
+    }
+
     // MARK: - Favorites Methods
     
     func getFavoriteRoasts() -> Observable<[Roast]> {

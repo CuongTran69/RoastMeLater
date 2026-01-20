@@ -4,22 +4,17 @@ struct LibraryView: View {
     @StateObject private var viewModel = LibraryViewModel()
     @EnvironmentObject var localizationManager: LocalizationManager
     @State private var showingFilterSheet = false
-    @State private var showingShareSheet = false
-    @State private var shareText = ""
+    @State private var showingSharePreview = false
+    @State private var selectedRoastForShare: Roast?
     let onNavigateToRoastGenerator: () -> Void
 
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                segmentedControl
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-
                 if viewModel.isLoading && viewModel.displayedRoasts.isEmpty {
                     loadingView
                 } else if viewModel.displayedRoasts.isEmpty {
                     LibraryEmptyStateView(
-                        filterMode: viewModel.filterMode,
                         onNavigateToRoastGenerator: onNavigateToRoastGenerator
                     )
                 } else {
@@ -38,29 +33,30 @@ struct LibraryView: View {
             }
         }
         .sheet(isPresented: $showingFilterSheet) {
-            LibraryFilterSheetView(selectedCategory: $viewModel.selectedCategory)
+            LibraryFilterSheetView(
+                selectedCategory: $viewModel.selectedCategory,
+                filterMode: $viewModel.filterMode
+            )
         }
-        .sheet(isPresented: $showingShareSheet) {
-            ShareSheet(activityItems: [shareText])
+        .sheet(isPresented: $showingSharePreview) {
+            if let roast = selectedRoastForShare {
+                SharePreviewView(roast: roast)
+            }
+        }
+        .alert(
+            "Lỗi",
+            isPresented: $viewModel.showError
+        ) {
+            Button("Đồng ý", role: .cancel) {
+                viewModel.showError = false
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? "Có lỗi xảy ra")
         }
         .onAppear {
             viewModel.loadRoasts()
         }
         .dismissKeyboard()
-    }
-
-    private var segmentedControl: some View {
-        Picker("", selection: $viewModel.filterMode) {
-            Text(Strings.Library.segmentAll.localized(localizationManager.currentLanguage))
-                .tag(LibraryFilterMode.all)
-            Text(Strings.Library.segmentFavorites.localized(localizationManager.currentLanguage))
-                .tag(LibraryFilterMode.favoritesOnly)
-        }
-        .pickerStyle(.segmented)
-        .onChange(of: viewModel.filterMode) { _ in
-            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-            impactFeedback.impactOccurred()
-        }
     }
 
     private var loadingView: some View {
@@ -122,18 +118,20 @@ struct LibraryView: View {
             Button(action: { showingFilterSheet = true }) {
                 Label(
                     Strings.Library.filterByCategory.localized(localizationManager.currentLanguage),
-                    systemImage: "line.3.horizontal.decrease.circle"
+                    systemImage: viewModel.selectedCategory != nil || viewModel.filterMode == .favoritesOnly
+                        ? "line.3.horizontal.decrease.circle.fill"
+                        : "line.3.horizontal.decrease.circle"
                 )
             }
 
-            if viewModel.selectedCategory != nil {
+            if viewModel.selectedCategory != nil || viewModel.filterMode == .favoritesOnly {
                 Button(action: {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         viewModel.clearFilters()
                     }
                 }) {
                     Label(
-                        Strings.Library.allCategories.localized(localizationManager.currentLanguage),
+                        Strings.Library.clearFilters.localized(localizationManager.currentLanguage),
                         systemImage: "xmark.circle"
                     )
                 }
@@ -155,19 +153,8 @@ struct LibraryView: View {
     }
 
     private func shareRoast(_ roast: Roast) {
-        let spiceLevelText = Strings.Favorites.spiceLevel.localized(localizationManager.currentLanguage)
-        let createdByText = Strings.Favorites.createdByApp.localized(localizationManager.currentLanguage)
-
-        shareText = """
-        🔥 RoastMe - \(localizationManager.categoryName(roast.category))
-
-        \(roast.content)
-
-        \(spiceLevelText): \(String(repeating: "🌶️", count: roast.spiceLevel))
-
-        \(createdByText)
-        """
-        showingShareSheet = true
+        selectedRoastForShare = roast
+        showingSharePreview = true
     }
 }
 
@@ -321,7 +308,6 @@ struct LibraryRoastRowView: View {
 
 struct LibraryEmptyStateView: View {
     @EnvironmentObject var localizationManager: LocalizationManager
-    let filterMode: LibraryFilterMode
     let onNavigateToRoastGenerator: () -> Void
 
     var body: some View {
@@ -351,7 +337,7 @@ struct LibraryEmptyStateView: View {
                 )
                 .frame(width: 120, height: 120)
 
-            Image(systemName: filterMode == .all ? "tray" : "heart.slash")
+            Image(systemName: "tray")
                 .font(.system(size: 48, weight: .light))
                 .foregroundStyle(
                     LinearGradient(
@@ -365,29 +351,17 @@ struct LibraryEmptyStateView: View {
 
     private var titleAndMessage: some View {
         VStack(spacing: 12) {
-            Text(emptyTitle)
+            Text(Strings.Library.emptyAllTitle.localized(localizationManager.currentLanguage))
                 .font(.title2.weight(.bold))
                 .foregroundColor(.primary)
                 .multilineTextAlignment(.center)
 
-            Text(emptyMessage)
+            Text(Strings.Library.emptyAllMessage.localized(localizationManager.currentLanguage))
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
         }
-    }
-
-    private var emptyTitle: String {
-        filterMode == .all
-            ? Strings.Library.emptyAllTitle.localized(localizationManager.currentLanguage)
-            : Strings.Library.emptyFavoritesTitle.localized(localizationManager.currentLanguage)
-    }
-
-    private var emptyMessage: String {
-        filterMode == .all
-            ? Strings.Library.emptyAllMessage.localized(localizationManager.currentLanguage)
-            : Strings.Library.emptyFavoritesMessage.localized(localizationManager.currentLanguage)
     }
 
     private var actionButton: some View {
@@ -424,11 +398,60 @@ struct LibraryEmptyStateView: View {
 struct LibraryFilterSheetView: View {
     @EnvironmentObject var localizationManager: LocalizationManager
     @Binding var selectedCategory: RoastCategory?
+    @Binding var filterMode: LibraryFilterMode
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationView {
             List {
+                Section(header: Text(Strings.Library.showSection.localized(localizationManager.currentLanguage))) {
+                    Button(action: {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        filterMode = .all
+                    }) {
+                        HStack {
+                            Image(systemName: "list.bullet")
+                                .foregroundColor(.blue)
+                                .frame(width: 24)
+
+                            Text(Strings.Library.showAll.localized(localizationManager.currentLanguage))
+                                .foregroundColor(.primary)
+
+                            Spacer()
+
+                            if filterMode == .all {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(.orange)
+                                    .font(.body.weight(.semibold))
+                            }
+                        }
+                    }
+
+                    Button(action: {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        filterMode = .favoritesOnly
+                    }) {
+                        HStack {
+                            Image(systemName: "heart.fill")
+                                .foregroundColor(.red)
+                                .frame(width: 24)
+
+                            Text(Strings.Library.showFavoritesOnly.localized(localizationManager.currentLanguage))
+                                .foregroundColor(.primary)
+
+                            Spacer()
+
+                            if filterMode == .favoritesOnly {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(.orange)
+                                    .font(.body.weight(.semibold))
+                            }
+                        }
+                    }
+                }
+
                 Section(Strings.RoastGenerator.category.localized(localizationManager.currentLanguage)) {
                     allCategoriesButton
 
@@ -438,14 +461,16 @@ struct LibraryFilterSheetView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle(Strings.Library.filterByCategory.localized(localizationManager.currentLanguage))
+            .navigationTitle(Strings.Library.filter.localized(localizationManager.currentLanguage))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(Strings.Common.done.localized(localizationManager.currentLanguage)) {
+                    Button {
                         dismiss()
+                    } label: {
+                        Text(Strings.Common.done.localized(localizationManager.currentLanguage))
+                            .font(.body.weight(.semibold))
                     }
-                    .font(.body.weight(.semibold))
                 }
             }
         }

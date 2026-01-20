@@ -22,19 +22,13 @@ class AIService: AIServiceProtocol {
         let currentLanguage = language ?? LocalizationManager.shared.currentLanguage
         let apiConfig = getAPIConfiguration()
 
-        // Debug logging
-        print("🔍 API Config Debug:")
-        print("  apiKey: \(apiConfig.apiKey.isEmpty ? "EMPTY" : "HAS_VALUE")")
-        print("  baseURL: \(apiConfig.baseURL)")
-        print("  modelName: \(apiConfig.modelName)")
-
         // Use mock data if no API configuration is provided
         if apiConfig.apiKey.isEmpty || apiConfig.baseURL.isEmpty {
+            #if DEBUG
             print("❌ Using mock data - API config not valid")
+            #endif
             return generateMockRoast(category: category, spiceLevel: spiceLevel, language: currentLanguage)
         }
-
-        print("✅ Using real API call")
 
         return Observable.create { observer in
             let prompt = self.createPrompt(category: category, spiceLevel: spiceLevel, language: currentLanguage)
@@ -69,39 +63,73 @@ class AIService: AIServiceProtocol {
                 "temperature": Constants.API.temperature
             ]
 
-            print("📤 API Request:")
-            print("  URL: \(url)")
-            print("  Model: \(apiConfig.modelName)")
-            print("  Prompt: \(prompt)")
-            print("  Headers: Authorization: Bearer \(apiConfig.apiKey.prefix(10))...")
-            
             do {
                 request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
             } catch {
                 observer.onError(error)
                 return Disposables.create()
             }
-            
+
             let task = self.session.dataTask(with: request) { data, response, error in
                 if let error = error {
+                    #if DEBUG
                     print("❌ Network Error: \(error.localizedDescription)")
-                    observer.onError(error)
+                    #endif
+                    if let urlError = error as? URLError {
+                        switch urlError.code {
+                        case .timedOut:
+                            observer.onError(AIServiceError.networkTimeout)
+                        case .notConnectedToInternet, .networkConnectionLost:
+                            observer.onError(urlError)
+                        default:
+                            observer.onError(error)
+                        }
+                    } else {
+                        observer.onError(error)
+                    }
                     return
                 }
 
+                // Check HTTP status code
                 if let httpResponse = response as? HTTPURLResponse {
-                    print("📡 HTTP Status: \(httpResponse.statusCode)")
+                    let statusCode = httpResponse.statusCode
+
+                    #if DEBUG
+                    print("📡 HTTP Status Code: \(statusCode)")
+                    #endif
+
+                    guard (200...299).contains(statusCode) else {
+                        // Try to parse error message from response
+                        var errorMessage: String?
+                        if let data = data {
+                            if let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: data) {
+                                errorMessage = errorResponse.error?.message
+                            }
+                        }
+
+                        let apiError: AIServiceError
+                        switch statusCode {
+                        case 401:
+                            apiError = .unauthorized
+                        case 429:
+                            apiError = .rateLimited
+                        case 500...599:
+                            apiError = .serverError
+                        default:
+                            apiError = .httpError(statusCode: statusCode, message: errorMessage)
+                        }
+
+                        #if DEBUG
+                        print("❌ HTTP Error: \(statusCode) - \(errorMessage ?? "No message")")
+                        #endif
+                        observer.onError(apiError)
+                        return
+                    }
                 }
 
                 guard let data = data else {
-                    print("❌ No data received")
                     observer.onError(AIServiceError.noData)
                     return
-                }
-
-                // Log raw response for debugging
-                if let responseString = String(data: data, encoding: .utf8) {
-                    print("📥 Raw Response: \(responseString)")
                 }
 
                 do {
@@ -109,20 +137,17 @@ class AIService: AIServiceProtocol {
 
                     // Validate response structure
                     guard !response.choices.isEmpty else {
-                        print("❌ API returned empty choices array")
                         observer.onError(AIServiceError.invalidResponse)
                         return
                     }
 
                     guard let firstChoice = response.choices.first else {
-                        print("❌ Invalid response structure - no first choice")
                         observer.onError(AIServiceError.invalidResponse)
                         return
                     }
 
                     let content = firstChoice.message.content
                     guard !content.isEmpty else {
-                        print("❌ Empty content in response")
                         observer.onError(AIServiceError.invalidResponse)
                         return
                     }
@@ -132,12 +157,9 @@ class AIService: AIServiceProtocol {
 
                     // Validate cleaned content is not empty
                     guard !cleanedContent.isEmpty else {
-                        print("❌ Cleaned content is empty")
                         observer.onError(AIServiceError.invalidResponse)
                         return
                     }
-
-                    print("✅ API Success: \(cleanedContent)")
 
                     let roast = Roast(
                         content: cleanedContent,
@@ -147,14 +169,34 @@ class AIService: AIServiceProtocol {
                     )
                     observer.onNext(roast)
                     observer.onCompleted()
+                } catch let decodingError as DecodingError {
+                    #if DEBUG
+                    print("❌ JSON Decode Error: \(decodingError)")
+                    #endif
+                    let errorDetails: String
+                    switch decodingError {
+                    case .keyNotFound(let key, _):
+                        errorDetails = "Thiếu trường '\(key.stringValue)'"
+                    case .typeMismatch(_, let context):
+                        errorDetails = context.debugDescription
+                    case .valueNotFound(_, let context):
+                        errorDetails = context.debugDescription
+                    case .dataCorrupted(let context):
+                        errorDetails = context.debugDescription
+                    @unknown default:
+                        errorDetails = decodingError.localizedDescription
+                    }
+                    observer.onError(AIServiceError.decodingError(errorDetails))
                 } catch {
-                    print("❌ JSON Decode Error: \(error)")
+                    #if DEBUG
+                    print("❌ Unknown Error: \(error)")
+                    #endif
                     observer.onError(error)
                 }
             }
-            
+
             task.resume()
-            
+
             return Disposables.create {
                 task.cancel()
             }
@@ -162,16 +204,15 @@ class AIService: AIServiceProtocol {
     }
     
     private func generateMockRoast(category: RoastCategory, spiceLevel: Int, language: String) -> Observable<Roast> {
-        return Observable.create { observer in
+        return Observable.create { [weak self] observer in
             // Simulate network delay
-            DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) {
+            DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                guard let self = self else {
+                    observer.onCompleted()
+                    return
+                }
                 let mockRoasts = self.getMockRoasts(for: category, spiceLevel: spiceLevel)
                 let randomRoast = mockRoasts.randomElement() ?? "Bạn làm việc chăm chỉ như một con ốc sên đang thi chạy marathon! 🐌"
-
-                print("🎭 Generated mock roast:")
-                print("  category: \(category.displayName)")
-                print("  requestedSpiceLevel: \(spiceLevel)")
-                print("  content: \(randomRoast)")
 
                 let roast = Roast(
                     content: randomRoast,
@@ -550,13 +591,10 @@ class AIService: AIServiceProtocol {
     // MARK: - API Testing
     func testAPIConnection(apiKey: String, baseURL: String, modelName: String) -> Observable<Bool> {
         return Observable.create { observer in
-            print("🔌 AIService.testAPIConnection called")
-            print("  API Key: \(apiKey.isEmpty ? "EMPTY" : "HAS_VALUE (\(apiKey.count) chars)")")
-            print("  Base URL: \(baseURL)")
-            print("  Model: \(modelName)")
-
             guard let url = URL(string: baseURL) else {
-                print("❌ Invalid URL: \(baseURL)")
+                #if DEBUG
+                print("❌ Invalid URL for API test")
+                #endif
                 observer.onNext(false)
                 observer.onCompleted()
                 return Disposables.create()
@@ -581,40 +619,39 @@ class AIService: AIServiceProtocol {
 
             do {
                 request.httpBody = try JSONSerialization.data(withJSONObject: testRequestBody)
-                print("✅ Request body created successfully")
             } catch {
+                #if DEBUG
                 print("❌ Failed to create request body: \(error)")
+                #endif
                 observer.onNext(false)
                 observer.onCompleted()
                 return Disposables.create()
             }
 
-            print("📡 Sending test request to: \(url)")
-
             let task = self.session.dataTask(with: request) { data, response, error in
                 if let error = error {
+                    #if DEBUG
                     print("❌ API Test Error: \(error.localizedDescription)")
+                    #endif
                     observer.onNext(false)
                     observer.onCompleted()
                     return
                 }
 
                 guard let httpResponse = response as? HTTPURLResponse else {
+                    #if DEBUG
                     print("❌ No HTTP response")
+                    #endif
                     observer.onNext(false)
                     observer.onCompleted()
                     return
                 }
 
-                print("📥 Response Status Code: \(httpResponse.statusCode)")
-
-                if let data = data, let responseString = String(data: data, encoding: .utf8) {
-                    print("📄 Response Body: \(responseString.prefix(200))...")
-                }
-
                 // Consider 200-299 as success
                 let isSuccess = (200...299).contains(httpResponse.statusCode)
-                print(isSuccess ? "✅ API Test SUCCESS" : "❌ API Test FAILED")
+                #if DEBUG
+                print(isSuccess ? "✅ API Test SUCCESS" : "❌ API Test FAILED (Status: \(httpResponse.statusCode))")
+                #endif
                 observer.onNext(isSuccess)
                 observer.onCompleted()
             }
@@ -628,12 +665,19 @@ class AIService: AIServiceProtocol {
     }
 }
 
-enum AIServiceError: Error {
+enum AIServiceError: LocalizedError {
     case noData
     case invalidResponse
     case apiKeyMissing
-    
-    var localizedDescription: String {
+    case invalidURL
+    case httpError(statusCode: Int, message: String?)
+    case unauthorized
+    case rateLimited
+    case serverError
+    case networkTimeout
+    case decodingError(String)
+
+    var errorDescription: String? {
         switch self {
         case .noData:
             return "Không nhận được dữ liệu từ server"
@@ -641,7 +685,28 @@ enum AIServiceError: Error {
             return "Phản hồi từ server không hợp lệ"
         case .apiKeyMissing:
             return "Thiếu API key"
+        case .invalidURL:
+            return "URL không hợp lệ"
+        case .httpError(let statusCode, let message):
+            if let message = message {
+                return "Lỗi server (\(statusCode)): \(message)"
+            }
+            return "Lỗi server (mã: \(statusCode))"
+        case .unauthorized:
+            return "API key không hợp lệ hoặc đã hết hạn. Vui lòng kiểm tra lại cấu hình API."
+        case .rateLimited:
+            return "Đã vượt quá giới hạn request. Vui lòng thử lại sau ít phút."
+        case .serverError:
+            return "Server đang gặp sự cố. Vui lòng thử lại sau."
+        case .networkTimeout:
+            return "Kết nối bị timeout. Vui lòng kiểm tra mạng và thử lại."
+        case .decodingError(let details):
+            return "Không thể xử lý phản hồi từ server: \(details)"
         }
+    }
+
+    var localizedDescription: String {
+        return errorDescription ?? "Có lỗi xảy ra"
     }
 }
 
@@ -656,4 +721,15 @@ struct Choice: Codable {
 
 struct Message: Codable {
     let content: String
+}
+
+// MARK: - API Error Response Model
+struct APIErrorResponse: Codable {
+    let error: APIErrorDetail?
+}
+
+struct APIErrorDetail: Codable {
+    let message: String?
+    let type: String?
+    let code: String?
 }

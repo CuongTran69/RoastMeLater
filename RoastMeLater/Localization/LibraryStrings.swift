@@ -39,6 +39,11 @@ extension Strings {
         static let sortBy = L("Sort by", "Sắp xếp theo")
         static let sortNewest = L("Newest First", "Mới nhất")
         static let sortOldest = L("Oldest First", "Cũ nhất")
+        static let clearFilters = L("Clear Filters", "Xóa bộ lọc")
+        static let filter = L("Filter", "Bộ lọc")
+        static let showAll = L("All Roasts", "Tất cả")
+        static let showFavoritesOnly = L("Favorites Only", "Chỉ yêu thích")
+        static let showSection = L("Show", "Hiển thị")
 
         // Actions
         static let delete = L("Delete", "Xóa")

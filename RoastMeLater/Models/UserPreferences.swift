@@ -24,10 +24,19 @@ struct UserPreferences: Codable {
     }
 }
 
+/// API Configuration - Note: API key is stored securely in Keychain, not in UserDefaults
+/// The apiKey property here is only used for in-memory operations and migration
 struct APIConfiguration: Codable {
     var apiKey: String
     var baseURL: String
     var modelName: String
+
+    // Custom coding keys to exclude apiKey from persistence
+    private enum CodingKeys: String, CodingKey {
+        case baseURL
+        case modelName
+        // apiKey is intentionally excluded - stored in Keychain
+    }
 
     init() {
         self.apiKey = ""
@@ -39,6 +48,21 @@ struct APIConfiguration: Codable {
         self.apiKey = apiKey
         self.baseURL = baseURL
         self.modelName = modelName
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.baseURL = try container.decodeIfPresent(String.self, forKey: .baseURL) ?? ""
+        self.modelName = try container.decodeIfPresent(String.self, forKey: .modelName) ?? Constants.API.defaultModel
+        // Load API key from Keychain instead of UserDefaults
+        self.apiKey = KeychainService.shared.getAPIKey()
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(baseURL, forKey: .baseURL)
+        try container.encode(modelName, forKey: .modelName)
+        // API key is NOT encoded - it's stored in Keychain separately
     }
 }
 

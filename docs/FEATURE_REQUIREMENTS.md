@@ -1,9 +1,10 @@
 # RoastMeLater Feature Enhancement Requirements
 
 ## Document Information
-- **Version**: 1.0
+- **Version**: 1.1
 - **Created**: 2026-01-13
-- **Status**: Draft
+- **Last Updated**: 2026-01-16
+- **Status**: Active
 - **Author**: August (Specification-Driven Development Agent)
 
 ---
@@ -11,6 +12,15 @@
 ## Executive Summary
 
 This document outlines the comprehensive requirements specification for RoastMeLater app enhancement based on user insight research. The proposed features aim to increase user engagement, retention, and viral growth while maintaining the app's core value proposition of stress relief through workplace humor.
+
+### Current App Color Scheme (Updated 2026-01-16)
+
+| Color | Hex | Description |
+|-------|-----|-------------|
+| Primary | `#E63946` | Crimson Red - Main accent color |
+| Secondary | `#1D3557` | Dark Navy - Contrast color |
+| Accent | `#F4A261` | Warm Sand - Highlight color |
+| Gradient | `#E63946` → `#9D0208` | Button gradients |
 
 ---
 
@@ -54,10 +64,16 @@ struct UserStreak: Codable {
 - Must not require internet connection for basic streak tracking
 
 ### 1.5 Success Criteria
-- [ ] Streak count accurately reflects consecutive days of usage
-- [ ] Streak persists across app restarts
-- [ ] Notifications trigger at appropriate times
-- [ ] UI displays streak information clearly
+- [x] Streak count accurately reflects consecutive days of usage
+- [x] Streak persists across app restarts
+- [x] Notifications trigger at appropriate times
+- [x] UI displays streak information clearly
+
+**Implementation Status**: ✅ **COMPLETE** (Implemented 2026-01-14)
+- `UserStreak.swift` model created
+- `StreakService.swift` service implemented
+- `StreakBadgeView.swift` UI component created
+- Integrated with app lifecycle and notifications
 
 ---
 
@@ -83,7 +99,7 @@ WidgetKit-based widgets that display "Roast of the Day" content directly on the 
 - **REQ-WDG-008**: WHEN configuring the widget THE SYSTEM SHALL allow users to set maximum spice level
 
 ### 2.3 Technical Requirements
-- Requires iOS 14.0+ for WidgetKit support
+- Requires iOS 15.0+ for WidgetKit support
 - Must create new Widget Extension target
 - Widget refresh timeline: every 24 hours minimum
 - Must share data with main app via App Groups
@@ -118,7 +134,7 @@ Generate visually appealing, branded images for sharing roasts on social media p
 
 ### 3.3 Technical Requirements
 - Use SwiftUI's ImageRenderer for image generation (iOS 16+)
-- Fallback to UIGraphicsImageRenderer for iOS 14-15
+- Fallback to UIGraphicsImageRenderer for iOS 15
 - Image resolution: 1080x1920 for stories, 1080x1080 for posts
 
 ### 3.4 Constraints
@@ -322,21 +338,21 @@ extension Roast {
 
 ## Appendix A: Priority Matrix
 
-| Feature | Impact | Effort | Priority | Recommended Phase |
-|---------|--------|--------|----------|-------------------|
-| Streak & Daily Rewards | High | Medium | P1 | Phase 1 |
-| iOS Widget | High | Medium | P1 | Phase 1 |
-| Enhanced Sharing | High | Low | P1 | Phase 1 |
-| Mood-Based Suggestions | Medium | Low | P2 | Phase 2 |
-| Achievement Badges | Medium | Medium | P2 | Phase 2 |
-| Roast Collections | Medium | Low | P2 | Phase 2 |
-| Quick Reactions | Medium | Low | P3 | Phase 3 |
+| Feature | Impact | Effort | Priority | Recommended Phase | Status |
+|---------|--------|--------|----------|-------------------|--------|
+| Streak & Daily Rewards | High | Medium | P1 | Phase 1 | ✅ Complete |
+| iOS Widget | High | Medium | P1 | Phase 1 | ❌ Not Started |
+| Enhanced Sharing | High | Low | P1 | Phase 1 | ⚠️ Basic Only |
+| Mood-Based Suggestions | Medium | Low | P2 | Phase 2 | ❌ Not Started |
+| Achievement Badges | Medium | Medium | P2 | Phase 2 | ❌ Not Started |
+| Roast Collections | Medium | Low | P2 | Phase 2 | ❌ Not Started |
+| Quick Reactions | Medium | Low | P3 | Phase 3 | ❌ Not Started |
 
 ## Appendix B: Dependencies
 
 ```
 Streak System ──────┬──► Achievement Badges
-                    │
+[✅ COMPLETE]       │
                     └──► Widget (streak display)
 
 Mood System ────────────► AI Service (prompt modification)
@@ -354,10 +370,25 @@ Reactions ──────────────► Roast Model (extension)
 2. **Offline**: Core features must work without internet connection
 3. **Privacy**: No user data sent to external services without explicit consent
 4. **Performance**: No feature should add >100ms to app launch time
-5. **Compatibility**: Must support iOS 14.0+ (Widget requires iOS 14+)
+5. **Compatibility**: Must support iOS 15.0+ (Widget requires iOS 15+)
 6. **Localization**: All new UI strings must support Vietnamese localization
+
+## Appendix D: UI Design Guidelines (Updated 2026-01-16)
+
+### Color Palette
+- **Primary**: `#E63946` (Crimson Red) - Use for main CTAs, icons, accents
+- **Secondary**: `#1D3557` (Dark Navy) - Use for contrast elements
+- **Accent**: `#F4A261` (Warm Sand) - Use for highlights, lower spice levels
+- **Gradient**: `#E63946` → `#9D0208` - Use for primary buttons
+
+### Design Principles
+- Clean, minimal UI with adequate whitespace
+- Grouped backgrounds for visual hierarchy
+- Subtle shadows for depth (opacity 0.04-0.08)
+- Corner radius: 12-16px for cards, 8-12px for buttons
+- Icon-based actions where possible
 
 ---
 
-*Document End - Version 1.0*
+*Document End - Version 1.1*
 

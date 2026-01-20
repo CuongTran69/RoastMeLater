@@ -10,7 +10,7 @@ struct Constants {
         static let bundleIdentifier = "com.roastme.app"
         static let supportEmail = "support@roastme.app"
         static let appStoreURL = "https://apps.apple.com/app/roastme"
-        static let minimumIOSVersion = "15.6"
+        static let minimumIOSVersion = "15.0"
         static let targetIOSVersion = "16.0"
     }
     
@@ -73,11 +73,13 @@ struct Constants {
         }
         
         struct Colors {
-            static let primary = Color.orange
-            static let secondary = Color.red
-            static let accent = Color.orange
+            static let primary = Color(red: 0.90, green: 0.22, blue: 0.27)  // #E63946 Crimson
+            static let secondary = Color(red: 0.11, green: 0.21, blue: 0.34)  // #1D3557 Dark Navy
+            static let accent = Color(red: 0.96, green: 0.63, blue: 0.38)  // #F4A261 Warm Sand
             static let background = Color(.systemBackground)
             static let secondaryBackground = Color(.systemGray6)
+            static let gradientStart = Color(red: 0.90, green: 0.22, blue: 0.27)  // #E63946
+            static let gradientEnd = Color(red: 0.62, green: 0.01, blue: 0.03)  // #9D0208 Deep Red
         }
     }
     
@@ -218,4 +220,5 @@ extension Notification.Name {
     static let favoriteDidChange = Notification.Name(Constants.NotificationNames.favoriteDidChange)
     static let roastDataDidChange = Notification.Name(Constants.NotificationNames.roastDataDidChange)
     static let languageDidChange = Notification.Name("languageDidChange")
+    static let dataSaveFailure = Notification.Name("dataSaveFailure")
 }

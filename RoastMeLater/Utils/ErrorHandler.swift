@@ -26,7 +26,24 @@ class ErrorHandler {
         case .invalidResponse:
             return "Phản hồi từ server không hợp lệ. Vui lòng thử lại sau."
         case .apiKeyMissing:
-            return "Thiếu cấu hình API. Vui lòng liên hệ hỗ trợ."
+            return "Thiếu cấu hình API. Vui lòng cấu hình API trong Cài đặt."
+        case .invalidURL:
+            return "URL API không hợp lệ. Vui lòng kiểm tra lại cấu hình."
+        case .httpError(let statusCode, let message):
+            if let message = message {
+                return "Lỗi server (\(statusCode)): \(message)"
+            }
+            return "Lỗi server (mã: \(statusCode)). Vui lòng thử lại sau."
+        case .unauthorized:
+            return "API key không hợp lệ hoặc đã hết hạn. Vui lòng kiểm tra lại cấu hình API."
+        case .rateLimited:
+            return "Đã vượt quá giới hạn request. Vui lòng thử lại sau ít phút."
+        case .serverError:
+            return "Server đang gặp sự cố. Vui lòng thử lại sau."
+        case .networkTimeout:
+            return "Kết nối bị timeout. Vui lòng kiểm tra mạng và thử lại."
+        case .decodingError:
+            return "Không thể xử lý phản hồi từ server. Vui lòng thử lại."
         }
     }
     

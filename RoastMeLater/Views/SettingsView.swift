@@ -135,6 +135,11 @@ struct SettingsView: View {
                         .padding(.vertical, 2)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel("\(localizationManager.notifications), \(viewModel.notificationsEnabled ? (localizationManager.currentLanguage == "en" ? "Enabled" : "Đã bật") : (localizationManager.currentLanguage == "en" ? "Disabled" : "Đã tắt"))")
+                    .accessibilityHint(isNotificationsExpanded
+                        ? (localizationManager.currentLanguage == "en" ? "Double tap to collapse" : "Nhấn đúp để thu gọn")
+                        : (localizationManager.currentLanguage == "en" ? "Double tap to expand" : "Nhấn đúp để mở rộng"))
+                    .accessibilityAddTraits(.isButton)
 
                     // Expandable Content
                     if isNotificationsExpanded {
@@ -153,6 +158,7 @@ struct SettingsView: View {
                                     }
                                 }
                         }
+                        .accessibilityElement(children: .combine)
 
                         if viewModel.notificationsEnabled {
                             // Frequency Picker
@@ -171,6 +177,7 @@ struct SettingsView: View {
                                     notificationManager.scheduleHourlyNotifications()
                                 }
                             }
+                            .accessibilityElement(children: .combine)
 
                             // Test Notification Button
                             Button(action: {
@@ -189,6 +196,8 @@ struct SettingsView: View {
                                         .foregroundColor(.secondary)
                                 }
                             }
+                            .accessibilityLabel(Strings.Settings.Notifications.testNotification.localized(localizationManager.currentLanguage))
+                            .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to send a test notification" : "Nhấn đúp để gửi thông báo thử nghiệm")
                         }
                     }
                 }
@@ -229,6 +238,11 @@ struct SettingsView: View {
                         .padding(.vertical, 2)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel("\(localizationManager.content), \(localizationManager.currentLanguage == "en" ? "Spice Level" : "Độ cay") \(viewModel.defaultSpiceLevel) \(localizationManager.currentLanguage == "en" ? "of" : "trên") 5")
+                    .accessibilityHint(isContentExpanded
+                        ? (localizationManager.currentLanguage == "en" ? "Double tap to collapse" : "Nhấn đúp để thu gọn")
+                        : (localizationManager.currentLanguage == "en" ? "Double tap to expand" : "Nhấn đúp để mở rộng"))
+                    .accessibilityAddTraits(.isButton)
 
                     // Expandable Content
                     if isContentExpanded {
@@ -258,6 +272,11 @@ struct SettingsView: View {
                                             .scaleEffect(level <= viewModel.defaultSpiceLevel ? 1.1 : 1.0)
                                     }
                                     .buttonStyle(PlainButtonStyle())
+                                    .accessibilityLabel(localizationManager.currentLanguage == "en" ? "Spice level \(level)" : "Độ cay \(level)")
+                                    .accessibilityHint(level == viewModel.defaultSpiceLevel
+                                        ? (localizationManager.currentLanguage == "en" ? "Currently selected" : "Đang được chọn")
+                                        : (localizationManager.currentLanguage == "en" ? "Double tap to select" : "Nhấn đúp để chọn"))
+                                    .accessibilityAddTraits(level == viewModel.defaultSpiceLevel ? .isSelected : [])
                                 }
                                 Spacer()
                             }
@@ -267,6 +286,8 @@ struct SettingsView: View {
                             .cornerRadius(12)
                         }
                         .padding(.vertical, 4)
+                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel(Strings.Settings.Content.defaultSpiceLevel.localized(localizationManager.currentLanguage))
 
                         // Default Category Picker
                         HStack(spacing: 14) {
@@ -291,6 +312,7 @@ struct SettingsView: View {
                             }
                             .pickerStyle(MenuPickerStyle())
                         }
+                        .accessibilityElement(children: .combine)
 
                         // Safety Filters Toggle
                         HStack(spacing: 14) {
@@ -302,6 +324,7 @@ struct SettingsView: View {
                                     viewModel.updateSafetyFilters(enabled)
                                 }
                         }
+                        .accessibilityElement(children: .combine)
                     }
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isContentExpanded)
@@ -364,6 +387,11 @@ struct SettingsView: View {
                         .padding(.vertical, 2)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel("\(Strings.Settings.APIConfig.sectionTitle.localized(localizationManager.currentLanguage)), \(isAPIConfigured ? (localizationManager.currentLanguage == "en" ? "Configured" : "Đã cấu hình") : (localizationManager.currentLanguage == "en" ? "Not configured" : "Chưa cấu hình"))")
+                    .accessibilityHint(shouldExpandAPIConfig
+                        ? (localizationManager.currentLanguage == "en" ? "Double tap to collapse" : "Nhấn đúp để thu gọn")
+                        : (localizationManager.currentLanguage == "en" ? "Double tap to expand" : "Nhấn đúp để mở rộng"))
+                    .accessibilityAddTraits(.isButton)
 
                     // Expandable Content
                     if shouldExpandAPIConfig {
@@ -379,6 +407,7 @@ struct SettingsView: View {
                             .padding(12)
                             .background(Color.blue.opacity(0.1))
                             .cornerRadius(10)
+                            .accessibilityElement(children: .combine)
 
                             // API Key Field
                             VStack(alignment: .leading, spacing: 6) {
@@ -390,14 +419,33 @@ struct SettingsView: View {
                                         .font(.subheadline.weight(.medium))
                                     Text("*")
                                         .foregroundColor(.red)
+                                        .accessibilityLabel(localizationManager.currentLanguage == "en" ? "Required" : "Bắt buộc")
                                 }
                                 SecureField("sk-xxxxxxxxxxxxxxxx", text: $viewModel.apiKey)
                                     .padding(12)
-                                    .background(Color(.systemGray6))
+                                    .background(viewModel.apiKeyError != nil ? Color.red.opacity(0.1) : Color(.systemGray6))
                                     .cornerRadius(10)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(viewModel.apiKeyError != nil ? Color.red : Color.clear, lineWidth: 1)
+                                    )
                                     .onChange(of: viewModel.apiKey) { _ in
                                         viewModel.apiTestResult = nil
+                                        viewModel.validateAPIKey()
                                     }
+                                    .accessibilityLabel(Strings.Settings.APIConfig.apiKey.localized(localizationManager.currentLanguage))
+                                    .accessibilityHint(localizationManager.currentLanguage == "en" ? "Enter your API key" : "Nhập API key của bạn")
+
+                                if let error = viewModel.apiKeyError {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "exclamationmark.circle.fill")
+                                            .font(.caption)
+                                        Text(error)
+                                            .font(.caption)
+                                    }
+                                    .foregroundColor(.red)
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
                             }
 
                             // Base URL Field
@@ -410,16 +458,35 @@ struct SettingsView: View {
                                         .font(.subheadline.weight(.medium))
                                     Text("*")
                                         .foregroundColor(.red)
+                                        .accessibilityLabel(localizationManager.currentLanguage == "en" ? "Required" : "Bắt buộc")
                                 }
                                 TextField("https://api.example.com/v1/chat/completions", text: $viewModel.baseURL)
                                     .padding(12)
-                                    .background(Color(.systemGray6))
+                                    .background(viewModel.baseURLError != nil ? Color.red.opacity(0.1) : Color(.systemGray6))
                                     .cornerRadius(10)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(viewModel.baseURLError != nil ? Color.red : Color.clear, lineWidth: 1)
+                                    )
                                     .autocapitalization(.none)
                                     .disableAutocorrection(true)
                                     .onChange(of: viewModel.baseURL) { _ in
                                         viewModel.apiTestResult = nil
+                                        viewModel.validateBaseURL()
                                     }
+                                    .accessibilityLabel(Strings.Settings.APIConfig.baseURL.localized(localizationManager.currentLanguage))
+                                    .accessibilityHint(localizationManager.currentLanguage == "en" ? "Enter the API base URL" : "Nhập URL cơ sở của API")
+
+                                if let error = viewModel.baseURLError {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "exclamationmark.circle.fill")
+                                            .font(.caption)
+                                        Text(error)
+                                            .font(.caption)
+                                    }
+                                    .foregroundColor(.red)
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
                             }
 
                             // Model Name Field (Editable)
@@ -433,19 +500,37 @@ struct SettingsView: View {
                                 }
                                 TextField("gemini:gemini-2.5-pro", text: $viewModel.modelName)
                                     .padding(12)
-                                    .background(Color(.systemGray6))
+                                    .background(viewModel.modelNameError != nil ? Color.red.opacity(0.1) : Color(.systemGray6))
                                     .cornerRadius(10)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(viewModel.modelNameError != nil ? Color.red : Color.clear, lineWidth: 1)
+                                    )
                                     .autocapitalization(.none)
                                     .disableAutocorrection(true)
                                     .onChange(of: viewModel.modelName) { _ in
                                         viewModel.apiTestResult = nil
+                                        viewModel.validateModelName()
                                     }
+                                    .accessibilityLabel(Strings.Settings.APIConfig.model.localized(localizationManager.currentLanguage))
+                                    .accessibilityHint(localizationManager.currentLanguage == "en" ? "Enter the model name" : "Nhập tên model")
 
-                                Text(localizationManager.currentLanguage == "en"
-                                    ? "Model name for AI service (e.g., gpt-4, gemini:gemini-2.5-pro)"
-                                    : "Tên model của dịch vụ AI (vd: gpt-4, gemini:gemini-2.5-pro)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                if let error = viewModel.modelNameError {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "exclamationmark.circle.fill")
+                                            .font(.caption)
+                                        Text(error)
+                                            .font(.caption)
+                                    }
+                                    .foregroundColor(.red)
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                } else {
+                                    Text(localizationManager.currentLanguage == "en"
+                                        ? "Model name for AI service (e.g., gpt-4, gemini:gemini-2.5-pro)"
+                                        : "Tên model của dịch vụ AI (vd: gpt-4, gemini:gemini-2.5-pro)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                             }
 
                             // Test Connection Button
@@ -471,7 +556,7 @@ struct SettingsView: View {
                                 .padding(.vertical, 14)
                                 .background(
                                     LinearGradient(
-                                        colors: viewModel.apiKey.isEmpty || viewModel.baseURL.isEmpty || viewModel.isTestingConnection
+                                        colors: !viewModel.isAPIFormValid || viewModel.isTestingConnection
                                             ? [Color.gray.opacity(0.3), Color.gray.opacity(0.2)]
                                             : [.orange, .red],
                                         startPoint: .leading,
@@ -480,10 +565,16 @@ struct SettingsView: View {
                                 )
                                 .foregroundColor(.white)
                                 .cornerRadius(12)
-                                .shadow(color: viewModel.apiKey.isEmpty || viewModel.baseURL.isEmpty || viewModel.isTestingConnection ? .clear : .orange.opacity(0.3), radius: 8, x: 0, y: 4)
+                                .shadow(color: !viewModel.isAPIFormValid || viewModel.isTestingConnection ? .clear : .orange.opacity(0.3), radius: 8, x: 0, y: 4)
                             }
                             .buttonStyle(BorderlessButtonStyle())
-                            .disabled(viewModel.apiKey.isEmpty || viewModel.baseURL.isEmpty || viewModel.isTestingConnection)
+                            .disabled(!viewModel.isAPIFormValid || viewModel.isTestingConnection)
+                            .accessibilityLabel(viewModel.isTestingConnection
+                                ? (localizationManager.currentLanguage == "en" ? "Testing connection" : "Đang kiểm tra kết nối")
+                                : Strings.Settings.APIConfig.testConnection.localized(localizationManager.currentLanguage))
+                            .accessibilityHint(!viewModel.isAPIFormValid
+                                ? (localizationManager.currentLanguage == "en" ? "Fill in API key and base URL first" : "Điền API key và URL cơ sở trước")
+                                : (localizationManager.currentLanguage == "en" ? "Double tap to test the API connection" : "Nhấn đúp để kiểm tra kết nối API"))
 
                             // Test Result
                             if let testResult = viewModel.apiTestResult {
@@ -501,6 +592,7 @@ struct SettingsView: View {
                                 .background((testResult ? Color.green : Color.red).opacity(0.1))
                                 .cornerRadius(10)
                                 .transition(.scale.combined(with: .opacity))
+                                .accessibilityElement(children: .combine)
                             }
                         }
                         .padding(.top, 8)
@@ -509,6 +601,9 @@ struct SettingsView: View {
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: shouldExpandAPIConfig)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.apiTestResult)
+                .animation(.easeInOut(duration: 0.2), value: viewModel.apiKeyError)
+                .animation(.easeInOut(duration: 0.2), value: viewModel.baseURLError)
+                .animation(.easeInOut(duration: 0.2), value: viewModel.modelNameError)
 
                 // MARK: - Data Management (Collapsible)
                 Section {
@@ -545,6 +640,11 @@ struct SettingsView: View {
                         .padding(.vertical, 2)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel("\(localizationManager.data), \(localizationManager.currentLanguage == "en" ? "Manage your data" : "Quản lý dữ liệu")")
+                    .accessibilityHint(isDataExpanded
+                        ? (localizationManager.currentLanguage == "en" ? "Double tap to collapse" : "Nhấn đúp để thu gọn")
+                        : (localizationManager.currentLanguage == "en" ? "Double tap to expand" : "Nhấn đúp để mở rộng"))
+                    .accessibilityAddTraits(.isButton)
 
                     // Expandable Content
                     if isDataExpanded {
@@ -563,6 +663,8 @@ struct SettingsView: View {
                                 Spacer()
                             }
                         }
+                        .accessibilityLabel(Strings.Settings.Data.dataManagement.localized(localizationManager.currentLanguage))
+                        .accessibilityHint(Strings.Settings.Data.dataManagementDesc.localized(localizationManager.currentLanguage))
 
                         // Clear History Button
                         Button(action: {
@@ -580,6 +682,8 @@ struct SettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+                        .accessibilityLabel(localizationManager.clearHistory)
+                        .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to clear all roast history" : "Nhấn đúp để xóa tất cả lịch sử roast")
 
                         // Clear Favorites Button
                         Button(action: {
@@ -597,6 +701,8 @@ struct SettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+                        .accessibilityLabel(localizationManager.clearFavorites)
+                        .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to clear all favorites" : "Nhấn đúp để xóa tất cả yêu thích")
 
                         // Reset Settings Button
                         Button(action: {
@@ -614,6 +720,8 @@ struct SettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+                        .accessibilityLabel(localizationManager.resetSettings)
+                        .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to reset all settings to default" : "Nhấn đúp để đặt lại tất cả cài đặt về mặc định")
                     }
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDataExpanded)
@@ -653,6 +761,11 @@ struct SettingsView: View {
                         .padding(.vertical, 2)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel("\(Strings.Settings.AppInfo.sectionTitle.localized(localizationManager.currentLanguage)), \(localizationManager.currentLanguage == "en" ? "About, Rate & Support" : "Giới thiệu, Đánh giá & Hỗ trợ")")
+                    .accessibilityHint(isAppInfoExpanded
+                        ? (localizationManager.currentLanguage == "en" ? "Double tap to collapse" : "Nhấn đúp để thu gọn")
+                        : (localizationManager.currentLanguage == "en" ? "Double tap to expand" : "Nhấn đúp để mở rộng"))
+                    .accessibilityAddTraits(.isButton)
 
                     // Expandable Content
                     if isAppInfoExpanded {
@@ -672,6 +785,8 @@ struct SettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+                        .accessibilityLabel(Strings.Settings.AppInfo.about.localized(localizationManager.currentLanguage))
+                        .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to view app information" : "Nhấn đúp để xem thông tin ứng dụng")
 
                         // Rate App Link
                         Link(destination: URL(string: "https://apps.apple.com")!) {
@@ -685,6 +800,8 @@ struct SettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+                        .accessibilityLabel(Strings.Settings.AppInfo.rateApp.localized(localizationManager.currentLanguage))
+                        .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to open App Store and rate this app" : "Nhấn đúp để mở App Store và đánh giá ứng dụng")
 
                         // Contact Support Link
                         Link(destination: URL(string: "mailto:support@roastme.app")!) {
@@ -698,6 +815,8 @@ struct SettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+                        .accessibilityLabel(Strings.Settings.AppInfo.contactSupport.localized(localizationManager.currentLanguage))
+                        .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to send an email to support" : "Nhấn đúp để gửi email đến bộ phận hỗ trợ")
                     }
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isAppInfoExpanded)
@@ -737,6 +856,11 @@ struct SettingsView: View {
                         .padding(.vertical, 2)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel("\(Strings.Streak.sectionTitle.localized(localizationManager.currentLanguage)), \(appLifecycleManager.currentStreak.currentStreak) \(localizationManager.currentLanguage == "en" ? "days" : "ngày")")
+                    .accessibilityHint(isStreakExpanded
+                        ? (localizationManager.currentLanguage == "en" ? "Double tap to collapse" : "Nhấn đúp để thu gọn")
+                        : (localizationManager.currentLanguage == "en" ? "Double tap to expand" : "Nhấn đúp để mở rộng"))
+                    .accessibilityAddTraits(.isButton)
 
                     // Expandable Content
                     if isStreakExpanded {
@@ -767,6 +891,8 @@ struct SettingsView: View {
                                         .font(.caption)
                                 }
                             }
+                            .accessibilityLabel(Strings.Streak.useStreakFreeze.localized(localizationManager.currentLanguage))
+                            .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to use streak freeze" : "Nhấn đúp để sử dụng đóng băng streak")
                         }
 
                         // Milestones
@@ -778,6 +904,8 @@ struct SettingsView: View {
                                 Spacer()
                             }
                         }
+                        .accessibilityLabel(Strings.Streak.streakMilestones.localized(localizationManager.currentLanguage))
+                        .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to view streak milestones" : "Nhấn đúp để xem các mốc streak")
                     }
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStreakExpanded)
@@ -817,6 +945,11 @@ struct SettingsView: View {
                         .padding(.vertical, 2)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel("\(Strings.Settings.Statistics.sectionTitle.localized(localizationManager.currentLanguage)), \(viewModel.totalRoastsGenerated) \(localizationManager.currentLanguage == "en" ? "roasts" : "roast")")
+                    .accessibilityHint(isStatisticsExpanded
+                        ? (localizationManager.currentLanguage == "en" ? "Double tap to collapse" : "Nhấn đúp để thu gọn")
+                        : (localizationManager.currentLanguage == "en" ? "Double tap to expand" : "Nhấn đúp để mở rộng"))
+                    .accessibilityAddTraits(.isButton)
 
                     // Expandable Content
                     if isStatisticsExpanded {
@@ -829,6 +962,7 @@ struct SettingsView: View {
                                 .font(.headline.weight(.semibold))
                                 .foregroundColor(.purple)
                         }
+                        .accessibilityElement(children: .combine)
 
                         // Favorite Roasts
                         HStack(spacing: 14) {
@@ -839,6 +973,7 @@ struct SettingsView: View {
                                 .font(.headline.weight(.semibold))
                                 .foregroundColor(.red)
                         }
+                        .accessibilityElement(children: .combine)
 
                         // Most Popular Category
                         HStack(spacing: 14) {
@@ -855,6 +990,7 @@ struct SettingsView: View {
                                     .foregroundColor(.orange)
                             }
                         }
+                        .accessibilityElement(children: .combine)
                     }
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isStatisticsExpanded)
@@ -875,6 +1011,8 @@ struct SettingsView: View {
                     }
                     .padding(.vertical, 8)
                     .listRowBackground(Color.clear)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("RoastMeLater \(localizationManager.currentLanguage == "en" ? "version" : "phiên bản") \(Constants.App.version)")
                 }
             }
             .listStyle(.insetGrouped)
@@ -922,6 +1060,17 @@ struct SettingsView: View {
             }
         } message: {
             Text(localizationManager.currentLanguage == "en" ? "Are you sure you want to reset all settings to default? This action cannot be undone." : "Bạn có chắc muốn đặt lại tất cả cài đặt về mặc định? Hành động này không thể hoàn tác.")
+        }
+        // Error Alert
+        .alert(
+            localizationManager.currentLanguage == "en" ? "Error" : "Lỗi",
+            isPresented: $viewModel.showError
+        ) {
+            Button(Strings.Common.ok.localized(localizationManager.currentLanguage), role: .cancel) {
+                viewModel.showError = false
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? (localizationManager.currentLanguage == "en" ? "An error occurred" : "Có lỗi xảy ra"))
         }
         .onAppear {
             viewModel.loadSettings()

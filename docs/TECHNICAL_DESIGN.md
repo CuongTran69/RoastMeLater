@@ -1,10 +1,60 @@
 # RoastMeLater Technical Design Specification
 
 ## Document Information
-- **Version**: 1.0
+- **Version**: 1.1
 - **Created**: 2026-01-13
-- **Status**: Draft
+- **Last Updated**: 2026-01-16
+- **Status**: Active
 - **Related**: FEATURE_REQUIREMENTS.md
+
+---
+
+## 0. Current Implementation Status
+
+### 0.1 App Color Scheme (Updated 2026-01-16)
+
+The app uses a **Crimson Red** theme replacing the previous orange color scheme:
+
+| Color Role | Hex Code | RGB | Usage |
+|------------|----------|-----|-------|
+| **Primary** | `#E63946` | `(230, 57, 70)` | Main accent, buttons, icons |
+| **Secondary** | `#1D3557` | `(29, 53, 87)` | Dark navy for contrast |
+| **Accent** | `#F4A261` | `(244, 162, 97)` | Warm sand for highlights |
+| **Gradient Start** | `#E63946` | `(230, 57, 70)` | Button gradient start |
+| **Gradient End** | `#9D0208` | `(157, 2, 8)` | Deep red gradient end |
+
+Colors are defined in `RoastMeLater/Utils/Constants.swift` under `Constants.UI.Colors`.
+
+### 0.2 Implemented Features
+
+| Feature | Status | Location |
+|---------|--------|----------|
+| Core Roast Generation | ✅ Complete | `RoastGeneratorView.swift`, `RoastGeneratorViewModel.swift` |
+| Roast History | ✅ Complete | `LibraryView.swift`, `RoastHistoryViewModel.swift` |
+| Favorites | ✅ Complete | `LibraryView.swift`, `FavoritesViewModel.swift` |
+| Settings | ✅ Complete | `SettingsView.swift` |
+| AI Integration (OpenAI/Gemini) | ✅ Complete | `AIService.swift` |
+| Localization (VI/EN) | ✅ Complete | `Localization/` folder |
+| Streak System | ✅ Complete | `StreakService.swift`, `StreakBadgeView.swift` |
+| iOS Widget | ✅ Complete | `RoastMeLaterWidget/`, `StorageService.swift` (App Group) |
+| Enhanced Sharing | ✅ Complete | `SocialSharingService.swift`, `SharePreviewView.swift` |
+| Achievement Badges | ❌ Not Started | - |
+
+### 0.3 UI Components (Updated 2026-01-16)
+
+| Component | File | Description |
+|-----------|------|-------------|
+| `RoastGeneratorView` | `Views/RoastGeneratorView.swift` | Main roast generation screen (simplified UI) |
+| `RoastCardView` | `Views/RoastGeneratorView.swift` | Displays generated roast with actions |
+| `RoastPlaceholderView` | `Views/RoastGeneratorView.swift` | Empty state placeholder |
+| `CategoryPickerView` | `Views/RoastGeneratorView.swift` | Category selection sheet |
+| `CategoryCard` | `Views/RoastGeneratorView.swift` | Individual category card |
+| `StreakBadgeView` | `Views/Components/StreakBadgeView.swift` | Streak display component |
+| `SharePreviewView` | `Views/Components/SharePreviewView.swift` | Enhanced sharing with template selection |
+| `ShareableRoastView` | `Services/SocialSharingService.swift` | Branded shareable roast card |
+| `LibraryView` | `Views/LibraryView.swift` | Combined History + Favorites |
+| `SettingsView` | `Views/SettingsView.swift` | App settings |
+| `SplashView` | `Views/SplashView.swift` | App launch screen |
 
 ---
 
@@ -437,34 +487,69 @@ extension StorageService {
 
 ---
 
-## 8. File Structure (New Files)
+## 8. File Structure
+
+### 8.1 Current Implemented Structure
 
 ```
 RoastMeLater/
 ├── Models/
-│   ├── UserStreak.swift          [NEW]
-│   ├── Badge.swift               [NEW]
-│   ├── UserMood.swift            [NEW]
-│   ├── RoastReaction.swift       [NEW]
-│   ├── RoastCollection.swift     [NEW]
-│   └── ShareTemplate.swift       [NEW]
+│   ├── Roast.swift               [IMPLEMENTED]
+│   ├── RoastCategory.swift       [IMPLEMENTED]
+│   ├── UserPreferences.swift     [IMPLEMENTED]
+│   └── UserStreak.swift          [IMPLEMENTED] - Phase 1 Streak
 ├── Services/
-│   ├── StreakService.swift       [NEW]
-│   ├── BadgeService.swift        [NEW]
-│   ├── ShareService.swift        [NEW]
-│   ├── CollectionService.swift   [NEW]
-│   └── ReactionService.swift     [NEW]
+│   ├── AIService.swift           [IMPLEMENTED]
+│   ├── StorageService.swift      [IMPLEMENTED]
+│   ├── SafetyFilter.swift        [IMPLEMENTED]
+│   ├── NotificationScheduler.swift [IMPLEMENTED]
+│   └── StreakService.swift       [IMPLEMENTED] - Phase 1 Streak
 ├── ViewModels/
-│   └── BadgesViewModel.swift     [NEW]
+│   ├── RoastGeneratorViewModel.swift [IMPLEMENTED]
+│   ├── RoastHistoryViewModel.swift   [IMPLEMENTED]
+│   └── FavoritesViewModel.swift      [IMPLEMENTED]
+├── Views/
+│   ├── ContentView.swift         [IMPLEMENTED]
+│   ├── RoastGeneratorView.swift  [IMPLEMENTED] - Updated UI 2026-01-16
+│   ├── LibraryView.swift         [IMPLEMENTED]
+│   ├── SettingsView.swift        [IMPLEMENTED]
+│   ├── SplashView.swift          [IMPLEMENTED] - Updated colors 2026-01-16
+│   └── Components/
+│       ├── StreakBadgeView.swift [IMPLEMENTED] - Phase 1 Streak
+│       └── PrivacyNoticeView.swift [IMPLEMENTED]
+├── Utils/
+│   ├── Constants.swift           [IMPLEMENTED] - Updated colors 2026-01-16
+│   └── Analytics.swift           [IMPLEMENTED]
+└── Localization/
+    ├── en.lproj/                 [IMPLEMENTED]
+    └── vi.lproj/                 [IMPLEMENTED]
+```
+
+### 8.2 Planned New Files (Not Yet Implemented)
+
+```
+RoastMeLater/
+├── Models/
+│   ├── Badge.swift               [PLANNED - Phase 2]
+│   ├── UserMood.swift            [PLANNED - Phase 2]
+│   ├── RoastReaction.swift       [PLANNED - Phase 3]
+│   ├── RoastCollection.swift     [PLANNED - Phase 2]
+│   └── ShareTemplate.swift       [PLANNED - Phase 1]
+├── Services/
+│   ├── BadgeService.swift        [PLANNED - Phase 2]
+│   ├── ShareService.swift        [PLANNED - Phase 1]
+│   ├── CollectionService.swift   [PLANNED - Phase 2]
+│   └── ReactionService.swift     [PLANNED - Phase 3]
+├── ViewModels/
+│   └── BadgesViewModel.swift     [PLANNED - Phase 2]
 ├── Views/
 │   ├── Components/
-│   │   ├── StreakBadgeView.swift     [NEW]
-│   │   ├── MoodPickerView.swift      [NEW]
-│   │   ├── ReactionButtonsView.swift [NEW]
-│   │   ├── BadgeGridView.swift       [NEW]
-│   │   └── SharePreviewView.swift    [NEW]
-│   └── BadgesView.swift          [NEW]
-└── RoastMeLaterWidget/           [NEW - Widget Extension]
+│   │   ├── MoodPickerView.swift      [PLANNED - Phase 2]
+│   │   ├── ReactionButtonsView.swift [PLANNED - Phase 3]
+│   │   ├── BadgeGridView.swift       [PLANNED - Phase 2]
+│   │   └── SharePreviewView.swift    [PLANNED - Phase 1]
+│   └── BadgesView.swift          [PLANNED - Phase 2]
+└── RoastMeLaterWidget/           [PLANNED - Phase 2 Widget Extension]
     ├── RoastWidget.swift
     ├── RoastWidgetProvider.swift
     └── RoastWidgetViews.swift
@@ -472,5 +557,5 @@ RoastMeLater/
 
 ---
 
-*Document End - Version 1.0*
+*Document End - Version 1.1*
 

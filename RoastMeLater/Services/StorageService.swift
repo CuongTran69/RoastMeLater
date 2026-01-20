@@ -20,6 +20,11 @@ protocol StorageServiceProtocol {
     func validateDataIntegrity() -> DataIntegrityResult
     func createDataBackup() -> DataBackup?
     func restoreFromBackup(_ backup: DataBackup) -> Bool
+
+    // Widget data management
+    func saveWidgetData(_ data: WidgetRoastData)
+    func getWidgetData() -> WidgetRoastData?
+    func updateWidgetWithLatestRoast(_ roast: Roast, streak: Int)
 }
 
 enum BulkSaveStrategy {
@@ -73,14 +78,43 @@ class StorageService: StorageServiceProtocol {
     private let userPreferencesKey = "user_preferences"
     private let userStreakKey = "user_streak"
 
+    // App Group for widget data sharing
+    private let appGroupIdentifier = "group.com.roastmelater"
+    private let widgetDataKey = "widget_roast_data"
+
+    private var appGroupDefaults: UserDefaults? {
+        UserDefaults(suiteName: appGroupIdentifier)
+    }
+
     private let roastHistorySubject = BehaviorSubject<[Roast]>(value: [])
     private let favoritesSubject = BehaviorSubject<[Roast]>(value: [])
 
-    // MARK: - In-Memory Cache
-    private var cachedRoastHistory: [Roast]?
-    private var cachedPreferences: UserPreferences?
-    private var cachedUserStreak: UserStreak?
+    // MARK: - In-Memory Cache with Thread Safety
+    private var _cachedRoastHistory: [Roast]?
+    private var _cachedPreferences: UserPreferences?
+    private var _cachedUserStreak: UserStreak?
     private let cacheQueue = DispatchQueue(label: "com.roastmelater.storage.cache", attributes: .concurrent)
+
+    // Thread-safe cache accessors
+    private var cachedRoastHistory: [Roast]? {
+        get { cacheQueue.sync { _cachedRoastHistory } }
+        set { cacheQueue.async(flags: .barrier) { [weak self] in self?._cachedRoastHistory = newValue } }
+    }
+
+    private var cachedPreferences: UserPreferences? {
+        get { cacheQueue.sync { _cachedPreferences } }
+        set { cacheQueue.async(flags: .barrier) { [weak self] in self?._cachedPreferences = newValue } }
+    }
+
+    private var cachedUserStreak: UserStreak? {
+        get { cacheQueue.sync { _cachedUserStreak } }
+        set { cacheQueue.async(flags: .barrier) { [weak self] in self?._cachedUserStreak = newValue } }
+    }
+
+    // Synchronous cache setter for cases where immediate availability is required
+    private func setCachedPreferencesSync(_ preferences: UserPreferences?) {
+        cacheQueue.sync(flags: .barrier) { [weak self] in self?._cachedPreferences = preferences }
+    }
 
     var roastHistory: Observable<[Roast]> {
         return roastHistorySubject.asObservable()
@@ -103,11 +137,9 @@ class StorageService: StorageServiceProtocol {
     }
 
     private func invalidateCache() {
-        cacheQueue.async(flags: .barrier) { [weak self] in
-            self?.cachedRoastHistory = nil
-            self?.cachedPreferences = nil
-            self?.cachedUserStreak = nil
-        }
+        cachedRoastHistory = nil
+        cachedPreferences = nil
+        cachedUserStreak = nil
     }
     
     func saveRoast(_ roast: Roast) {
@@ -120,6 +152,11 @@ class StorageService: StorageServiceProtocol {
         }
 
         saveRoastHistory(history)
+
+        // Update widget data with latest roast
+        let streak = getUserStreak()?.currentStreak ?? 0
+        updateWidgetWithLatestRoast(roast, streak: streak)
+
         roastHistorySubject.onNext(history)
 
         // Update favorites if this roast is favorited
@@ -131,8 +168,8 @@ class StorageService: StorageServiceProtocol {
     
     func getRoastHistory() -> [Roast] {
         return PerformanceMonitor.shared.measure(operation: "StorageService.getRoastHistory") {
-            // Check cache first
-            if let cached = cacheQueue.sync(execute: { cachedRoastHistory }) {
+            // Check cache first (thread-safe via property accessor)
+            if let cached = cachedRoastHistory {
                 return cached
             }
 
@@ -142,10 +179,8 @@ class StorageService: StorageServiceProtocol {
                 return []
             }
 
-            // Update cache
-            cacheQueue.async(flags: .barrier) { [weak self] in
-                self?.cachedRoastHistory = roasts
-            }
+            // Update cache (thread-safe via property accessor)
+            cachedRoastHistory = roasts
 
             return roasts
         }
@@ -166,19 +201,13 @@ class StorageService: StorageServiceProtocol {
         var history = getRoastHistory()
 
         if let index = history.firstIndex(where: { $0.id == roastId }) {
-            let oldValue = history[index].isFavorite
             history[index].isFavorite.toggle()
             let newValue = history[index].isFavorite
-
-            print("🔄 StorageService.toggleFavorite:")
-            print("  roastId: \(roastId)")
-            print("  isFavorite: \(oldValue) -> \(newValue)")
 
             saveRoastHistory(history)
             roastHistorySubject.onNext(history)
 
             let favorites = getFavoriteRoasts()
-            print("  favorites count: \(favorites.count)")
             favoritesSubject.onNext(favorites)
 
             // ✅ Notify all ViewModels about favorite change
@@ -192,7 +221,9 @@ class StorageService: StorageServiceProtocol {
                 ]
             )
         } else {
+            #if DEBUG
             print("❌ StorageService.toggleFavorite: Roast not found with id \(roastId)")
+            #endif
         }
     }
     
@@ -212,23 +243,37 @@ class StorageService: StorageServiceProtocol {
             let data = try JSONEncoder().encode(roasts)
             userDefaults.set(data, forKey: roastHistoryKey)
 
-            // Update cache
-            cacheQueue.async(flags: .barrier) { [weak self] in
-                self?.cachedRoastHistory = roasts
-            }
+            // Update cache (thread-safe via property accessor)
+            cachedRoastHistory = roasts
         } catch {
+            #if DEBUG
             print("❌ CRITICAL: Failed to encode roast history: \(error)")
-            print("   This is a data loss event - roasts were not saved!")
-            // TODO: Notify user about data save failure
+            #endif
+            // Notify user about data save failure
+            NotificationCenter.default.post(
+                name: .dataSaveFailure,
+                object: nil,
+                userInfo: ["error": error, "context": "saveRoastHistory"]
+            )
             ErrorHandler.shared.logError(error, context: "saveRoastHistory")
         }
     }
 
     func saveUserPreferences(_ preferences: UserPreferences) {
+        #if DEBUG
         print("💾 StorageService.saveUserPreferences called")
-        print("  apiKey: \(preferences.apiConfiguration.apiKey.isEmpty ? "EMPTY" : "HAS_VALUE (\(preferences.apiConfiguration.apiKey.count) chars)")")
-        print("  baseURL: \(preferences.apiConfiguration.baseURL.isEmpty ? "EMPTY" : preferences.apiConfiguration.baseURL)")
-        print("  modelName: \(preferences.apiConfiguration.modelName.isEmpty ? "EMPTY" : preferences.apiConfiguration.modelName)")
+        #endif
+
+        // Save API key to Keychain (secure storage)
+        if !preferences.apiConfiguration.apiKey.isEmpty {
+            KeychainService.shared.saveAPIKey(preferences.apiConfiguration.apiKey)
+        }
+        if !preferences.apiConfiguration.baseURL.isEmpty {
+            KeychainService.shared.saveBaseURL(preferences.apiConfiguration.baseURL)
+        }
+        if !preferences.apiConfiguration.modelName.isEmpty {
+            KeychainService.shared.saveModelName(preferences.apiConfiguration.modelName)
+        }
 
         do {
             let data = try JSONEncoder().encode(preferences)
@@ -236,55 +281,54 @@ class StorageService: StorageServiceProtocol {
 
             // Force synchronize to ensure data is written immediately
             userDefaults.synchronize()
+            #if DEBUG
             print("✅ Preferences saved to UserDefaults and synchronized")
+            #endif
 
             // Update cache synchronously to ensure immediate availability
-            cacheQueue.sync(flags: .barrier) { [weak self] in
-                self?.cachedPreferences = preferences
-                print("✅ Cache updated synchronously")
-            }
+            setCachedPreferencesSync(preferences)
         } catch {
+            #if DEBUG
             print("❌ CRITICAL: Failed to encode preferences: \(error)")
-            print("   User preferences were not saved!")
+            #endif
             ErrorHandler.shared.logError(error, context: "saveUserPreferences")
         }
     }
 
     func getUserPreferences() -> UserPreferences {
-        // Check cache first
-        if let cached = cacheQueue.sync(execute: { cachedPreferences }) {
-            print("📦 getUserPreferences: Using cached preferences")
-            print("  apiKey: \(cached.apiConfiguration.apiKey.isEmpty ? "EMPTY" : "HAS_VALUE (\(cached.apiConfiguration.apiKey.count) chars)")")
-            print("  baseURL: \(cached.apiConfiguration.baseURL.isEmpty ? "EMPTY" : cached.apiConfiguration.baseURL)")
-            print("  modelName: \(cached.apiConfiguration.modelName.isEmpty ? "EMPTY" : cached.apiConfiguration.modelName)")
+        // Check cache first (thread-safe via property accessor)
+        if let cached = cachedPreferences {
             return cached
         }
 
+        #if DEBUG
         print("📂 getUserPreferences: Loading from UserDefaults")
+        #endif
 
         // Load from UserDefaults
         guard let data = userDefaults.data(forKey: userPreferencesKey),
-              let preferences = try? JSONDecoder().decode(UserPreferences.self, from: data) else {
+              var preferences = try? JSONDecoder().decode(UserPreferences.self, from: data) else {
+            #if DEBUG
             print("⚠️ No preferences found, using defaults")
+            #endif
             let defaultPrefs = UserPreferences()
 
             // Cache default preferences synchronously
-            cacheQueue.sync(flags: .barrier) { [weak self] in
-                self?.cachedPreferences = defaultPrefs
-            }
+            setCachedPreferencesSync(defaultPrefs)
 
             return defaultPrefs
         }
 
-        print("✅ Loaded preferences from UserDefaults")
-        print("  apiKey: \(preferences.apiConfiguration.apiKey.isEmpty ? "EMPTY" : "HAS_VALUE (\(preferences.apiConfiguration.apiKey.count) chars)")")
-        print("  baseURL: \(preferences.apiConfiguration.baseURL.isEmpty ? "EMPTY" : preferences.apiConfiguration.baseURL)")
-        print("  modelName: \(preferences.apiConfiguration.modelName.isEmpty ? "EMPTY" : preferences.apiConfiguration.modelName)")
+        // Load API key from Keychain (secure storage)
+        preferences.apiConfiguration.apiKey = KeychainService.shared.getAPIKey()
+        preferences.apiConfiguration.baseURL = KeychainService.shared.getBaseURL()
+        let keychainModel = KeychainService.shared.getModelName()
+        if !keychainModel.isEmpty {
+            preferences.apiConfiguration.modelName = keychainModel
+        }
 
         // Update cache synchronously
-        cacheQueue.sync(flags: .barrier) { [weak self] in
-            self?.cachedPreferences = preferences
-        }
+        setCachedPreferencesSync(preferences)
 
         return preferences
     }
@@ -295,19 +339,19 @@ class StorageService: StorageServiceProtocol {
             userDefaults.set(data, forKey: userStreakKey)
             userDefaults.synchronize()
 
-            // Update cache
-            cacheQueue.async(flags: .barrier) { [weak self] in
-                self?.cachedUserStreak = streak
-            }
+            // Update cache (thread-safe via property accessor)
+            cachedUserStreak = streak
         } catch {
+            #if DEBUG
             print("❌ CRITICAL: Failed to encode user streak: \(error)")
+            #endif
             ErrorHandler.shared.logError(error, context: "saveUserStreak")
         }
     }
 
     func getUserStreak() -> UserStreak? {
-        // Check cache first
-        if let cached = cacheQueue.sync(execute: { cachedUserStreak }) {
+        // Check cache first (thread-safe via property accessor)
+        if let cached = cachedUserStreak {
             return cached
         }
 
@@ -317,10 +361,8 @@ class StorageService: StorageServiceProtocol {
             return nil
         }
 
-        // Update cache
-        cacheQueue.async(flags: .barrier) { [weak self] in
-            self?.cachedUserStreak = streak
-        }
+        // Update cache (thread-safe via property accessor)
+        cachedUserStreak = streak
 
         return streak
     }
@@ -329,6 +371,15 @@ class StorageService: StorageServiceProtocol {
         userDefaults.removeObject(forKey: roastHistoryKey)
         userDefaults.removeObject(forKey: userPreferencesKey)
         userDefaults.removeObject(forKey: userStreakKey)
+
+        // Clear API configuration from Keychain
+        KeychainService.shared.clearAPIConfiguration()
+
+        // Clear widget data from App Group
+        if let defaults = appGroupDefaults {
+            defaults.removeObject(forKey: widgetDataKey)
+            defaults.synchronize()
+        }
 
         // Clear cache
         invalidateCache()
@@ -342,104 +393,82 @@ class StorageService: StorageServiceProtocol {
     func bulkSaveRoasts(_ roasts: [Roast], strategy: BulkSaveStrategy = .append) -> BulkOperationResult {
         var processedCount = 0
         var skippedCount = 0
-        var errors: [BulkOperationError] = []
+        let errors: [BulkOperationError] = []
 
-        do {
-            var currentHistory = getRoastHistory()
-            let existingIds = Set(currentHistory.map { $0.id })
+        var currentHistory = getRoastHistory()
+        let existingIds = Set(currentHistory.map { $0.id })
 
-            switch strategy {
-            case .replace:
-                currentHistory = roasts
-                processedCount = roasts.count
+        switch strategy {
+        case .replace:
+            currentHistory = roasts
+            processedCount = roasts.count
 
-            case .append:
-                for roast in roasts {
+        case .append:
+            for roast in roasts {
+                currentHistory.insert(roast, at: 0)
+                processedCount += 1
+            }
+
+        case .merge:
+            for roast in roasts {
+                if existingIds.contains(roast.id) {
+                    skippedCount += 1
+                } else {
                     currentHistory.insert(roast, at: 0)
                     processedCount += 1
                 }
-
-            case .merge:
-                for roast in roasts {
-                    if existingIds.contains(roast.id) {
-                        skippedCount += 1
-                    } else {
-                        currentHistory.insert(roast, at: 0)
-                        processedCount += 1
-                    }
-                }
             }
-
-            // Maintain size limit (using constant)
-            if currentHistory.count > Constants.Content.maxHistoryItemsBulk {
-                currentHistory = Array(currentHistory.prefix(Constants.Content.maxHistoryItemsBulk))
-            }
-
-            saveRoastHistory(currentHistory)
-            roastHistorySubject.onNext(currentHistory)
-
-            // Update favorites
-            let favorites = getFavoriteRoasts()
-            favoritesSubject.onNext(favorites)
-
-            return BulkOperationResult(
-                success: true,
-                processedCount: processedCount,
-                skippedCount: skippedCount,
-                errors: errors
-            )
-
-        } catch {
-            errors.append(BulkOperationError(itemId: "bulk_operation", error: error))
-            return BulkOperationResult(
-                success: false,
-                processedCount: processedCount,
-                skippedCount: skippedCount,
-                errors: errors
-            )
         }
+
+        // Maintain size limit (using constant)
+        if currentHistory.count > Constants.Content.maxHistoryItemsBulk {
+            currentHistory = Array(currentHistory.prefix(Constants.Content.maxHistoryItemsBulk))
+        }
+
+        saveRoastHistory(currentHistory)
+        roastHistorySubject.onNext(currentHistory)
+
+        // Update favorites
+        let favorites = getFavoriteRoasts()
+        favoritesSubject.onNext(favorites)
+
+        return BulkOperationResult(
+            success: true,
+            processedCount: processedCount,
+            skippedCount: skippedCount,
+            errors: errors
+        )
     }
 
     func bulkUpdateFavorites(_ favoriteIds: [UUID]) -> BulkOperationResult {
         var processedCount = 0
         var skippedCount = 0
-        var errors: [BulkOperationError] = []
+        let errors: [BulkOperationError] = []
 
-        do {
-            var history = getRoastHistory()
-            let roastIdMap = Dictionary(uniqueKeysWithValues: history.enumerated().map { ($1.id, $0) })
+        var history = getRoastHistory()
+        let roastIdMap = Dictionary(uniqueKeysWithValues: history.enumerated().map { ($1.id, $0) })
 
-            for favoriteId in favoriteIds {
-                if let index = roastIdMap[favoriteId] {
-                    history[index].isFavorite = true
-                    processedCount += 1
-                } else {
-                    skippedCount += 1
-                }
+        for favoriteId in favoriteIds {
+            if let index = roastIdMap[favoriteId] {
+                history[index].isFavorite = true
+                processedCount += 1
+            } else {
+                skippedCount += 1
             }
-
-            saveRoastHistory(history)
-            roastHistorySubject.onNext(history)
-
-            let favorites = getFavoriteRoasts()
-            favoritesSubject.onNext(favorites)
-
-            return BulkOperationResult(
-                success: true,
-                processedCount: processedCount,
-                skippedCount: skippedCount,
-                errors: errors
-            )
-
-        } catch {
-            errors.append(BulkOperationError(itemId: "bulk_favorites", error: error))
-            return BulkOperationResult(
-                success: false,
-                processedCount: processedCount,
-                skippedCount: skippedCount,
-                errors: errors
-            )
         }
+
+        saveRoastHistory(history)
+        roastHistorySubject.onNext(history)
+
+        let favorites = getFavoriteRoasts()
+        favoritesSubject.onNext(favorites)
+
+        return BulkOperationResult(
+            success: true,
+            processedCount: processedCount,
+            skippedCount: skippedCount,
+            errors: errors
+        )
     }
 
     func validateDataIntegrity() -> DataIntegrityResult {
@@ -498,36 +527,78 @@ class StorageService: StorageServiceProtocol {
     }
 
     func createDataBackup() -> DataBackup? {
-        do {
-            let roasts = getRoastHistory()
-            let preferences = getUserPreferences()
+        let roasts = getRoastHistory()
+        let preferences = getUserPreferences()
 
-            return DataBackup(
-                roasts: roasts,
-                preferences: preferences,
-                timestamp: Date()
-            )
+        return DataBackup(
+            roasts: roasts,
+            preferences: preferences,
+            timestamp: Date()
+        )
+    }
+
+    func restoreFromBackup(_ backup: DataBackup) -> Bool {
+        // Clear existing data
+        clearAllData()
+
+        // Restore preferences
+        saveUserPreferences(backup.preferences)
+
+        // Restore roasts
+        let result = bulkSaveRoasts(backup.roasts, strategy: .replace)
+
+        return result.success
+    }
+
+    // MARK: - Widget Data Management
+
+    func saveWidgetData(_ data: WidgetRoastData) {
+        guard let defaults = appGroupDefaults else {
+            #if DEBUG
+            print("❌ Failed to access App Group UserDefaults")
+            #endif
+            return
+        }
+
+        do {
+            let encodedData = try JSONEncoder().encode(data)
+            defaults.set(encodedData, forKey: widgetDataKey)
+            defaults.synchronize()
         } catch {
-            print("Failed to create backup: \(error)")
+            #if DEBUG
+            print("❌ Failed to encode widget data: \(error)")
+            #endif
+            ErrorHandler.shared.logError(error, context: "saveWidgetData")
+        }
+    }
+
+    func getWidgetData() -> WidgetRoastData? {
+        guard let defaults = appGroupDefaults,
+              let data = defaults.data(forKey: widgetDataKey) else {
+            return nil
+        }
+
+        do {
+            return try JSONDecoder().decode(WidgetRoastData.self, from: data)
+        } catch {
+            #if DEBUG
+            print("❌ Failed to decode widget data: \(error)")
+            #endif
+            // Clean up corrupted data
+            defaults.removeObject(forKey: widgetDataKey)
             return nil
         }
     }
 
-    func restoreFromBackup(_ backup: DataBackup) -> Bool {
-        do {
-            // Clear existing data
-            clearAllData()
-
-            // Restore preferences
-            saveUserPreferences(backup.preferences)
-
-            // Restore roasts
-            let result = bulkSaveRoasts(backup.roasts, strategy: .replace)
-
-            return result.success
-        } catch {
-            print("Failed to restore from backup: \(error)")
-            return false
-        }
+    func updateWidgetWithLatestRoast(_ roast: Roast, streak: Int) {
+        let widgetData = WidgetRoastData(
+            roastOfTheDay: roast.content,
+            category: roast.category.rawValue,
+            categoryIcon: roast.category.icon,
+            spiceLevel: roast.spiceLevel,
+            generatedDate: roast.createdAt,
+            currentStreak: streak
+        )
+        saveWidgetData(widgetData)
     }
 }

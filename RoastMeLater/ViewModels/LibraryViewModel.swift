@@ -176,10 +176,15 @@ class LibraryViewModel: ObservableObject {
               let roastId = userInfo["roastId"] as? UUID,
               let isFavorite = userInfo["isFavorite"] as? Bool else { return }
 
-        if let index = allRoasts.firstIndex(where: { $0.id == roastId }) {
-            allRoasts[index].isFavorite = isFavorite
-            roastsSubject.onNext(allRoasts)
-            applyFiltersAndPagination()
+        // Ensure UI updates happen on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+
+            if let index = self.allRoasts.firstIndex(where: { $0.id == roastId }) {
+                self.allRoasts[index].isFavorite = isFavorite
+                self.roastsSubject.onNext(self.allRoasts)
+                self.applyFiltersAndPagination()
+            }
         }
     }
 
@@ -192,7 +197,8 @@ class LibraryViewModel: ObservableObject {
 
             let roasts = self.storageService.getRoastHistory()
 
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
                 self.allRoasts = roasts
                 self.roastsSubject.onNext(roasts)
                 self.applyFiltersAndPagination()

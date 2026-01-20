@@ -39,7 +39,7 @@ struct ContentView: View {
                 }
                 .tag(2)
         }
-        .accentColor(.orange)
+        .accentColor(Constants.UI.Colors.primary)
     }
 }
 

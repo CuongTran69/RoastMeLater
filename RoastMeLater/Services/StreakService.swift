@@ -103,10 +103,15 @@ class StreakService: StreakServiceProtocol {
         let daysSinceLastActive = calendar.dateComponents([.day], from: lastActiveDate, to: today).day ?? 0
 
         if daysSinceLastActive > 1 {
+            // If freeze is available and streak is worth preserving (>= 7 days),
+            // return frozen status without resetting the streak.
+            // The streak will be preserved until user explicitly uses the freeze
+            // or the freeze expires/is declined.
             if _currentStreak.streakFreezeAvailable && _currentStreak.currentStreak >= 7 {
-                return .expired
+                return .frozen
             }
 
+            // No freeze available or streak too short - reset the streak
             _currentStreak.currentStreak = 1
             _currentStreak.totalDaysActive += 1
             _currentStreak.lastActiveDate = today
@@ -123,10 +128,12 @@ class StreakService: StreakServiceProtocol {
     }
 
     func useStreakFreeze() -> Bool {
+        // Ensure freeze is available
         guard _currentStreak.streakFreezeAvailable else {
             return false
         }
 
+        // Only allow freeze for streaks worth preserving (>= 7 days)
         guard _currentStreak.currentStreak >= 7 else {
             return false
         }
@@ -134,14 +141,20 @@ class StreakService: StreakServiceProtocol {
         let lastActiveDate = _currentStreak.lastActiveDate
         let daysSinceLastActive = calendar.dateComponents([.day], from: lastActiveDate, to: Date()).day ?? 0
 
+        // Only use freeze if streak would have been lost (missed more than 1 day)
         guard daysSinceLastActive > 1 else {
             return false
         }
 
+        // Use the freeze to preserve the streak
         _currentStreak.streakFreezeAvailable = false
         _currentStreak.streakFreezeUsedDate = Date()
         _currentStreak.lastActiveDate = Date()
+        // Increment streak since the freeze covers the missed day(s)
+        _currentStreak.currentStreak += 1
         _currentStreak.totalDaysActive += 1
+        // Update longest streak if current streak exceeds it
+        _currentStreak.longestStreak = max(_currentStreak.longestStreak, _currentStreak.currentStreak)
         saveStreak()
 
         return true

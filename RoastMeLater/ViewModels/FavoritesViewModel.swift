@@ -100,13 +100,14 @@ class FavoritesViewModel: ObservableObject {
     // MARK: - Public Methods
     func loadFavorites() {
         loadingSubject.onNext(true)
-        
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            
+
             let favorites = self.storageService.getFavoriteRoasts()
-            
-            DispatchQueue.main.async {
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
                 self.favoriteRoasts = favorites
                 self.favoritesSubject.onNext(favorites)
                 self.loadingSubject.onNext(false)
@@ -115,10 +116,12 @@ class FavoritesViewModel: ObservableObject {
     }
     
     func toggleFavorite(roast: Roast) {
+        #if DEBUG
         print("🔄 FavoritesViewModel.toggleFavorite:")
         print("  roast.id: \(roast.id)")
         print("  roast.isFavorite BEFORE: \(roast.isFavorite)")
         print("  favoriteRoasts count BEFORE: \(favoriteRoasts.count)")
+        #endif
 
         storageService.toggleFavorite(roastId: roast.id)
         // Note: Local update will be handled by handleFavoriteChange via notification
@@ -129,25 +132,34 @@ class FavoritesViewModel: ObservableObject {
               let roastId = userInfo["roastId"] as? UUID,
               let isFavorite = userInfo["isFavorite"] as? Bool else { return }
 
-        print("🔄 FavoritesViewModel.handleFavoriteChange:")
-        print("  roastId: \(roastId)")
-        print("  isFavorite: \(isFavorite)")
-        print("  favoriteRoasts count BEFORE: \(favoriteRoasts.count)")
+        // Ensure UI updates happen on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
 
-        if isFavorite {
-            // Add to favorites if not already present
-            if !favoriteRoasts.contains(where: { $0.id == roastId }) {
-                if let updatedRoast = userInfo["roast"] as? Roast {
-                    favoriteRoasts.insert(updatedRoast, at: 0) // Add to beginning
+            #if DEBUG
+            print("🔄 FavoritesViewModel.handleFavoriteChange:")
+            print("  roastId: \(roastId)")
+            print("  isFavorite: \(isFavorite)")
+            print("  favoriteRoasts count BEFORE: \(self.favoriteRoasts.count)")
+            #endif
+
+            if isFavorite {
+                // Add to favorites if not already present
+                if !self.favoriteRoasts.contains(where: { $0.id == roastId }) {
+                    if let updatedRoast = userInfo["roast"] as? Roast {
+                        self.favoriteRoasts.insert(updatedRoast, at: 0) // Add to beginning
+                    }
                 }
+            } else {
+                // Remove from favorites
+                self.favoriteRoasts.removeAll { $0.id == roastId }
             }
-        } else {
-            // Remove from favorites
-            favoriteRoasts.removeAll { $0.id == roastId }
-        }
 
-        print("  favoriteRoasts count AFTER: \(favoriteRoasts.count)")
-        favoritesSubject.onNext(favoriteRoasts)
+            #if DEBUG
+            print("  favoriteRoasts count AFTER: \(self.favoriteRoasts.count)")
+            #endif
+            self.favoritesSubject.onNext(self.favoriteRoasts)
+        }
     }
     
     func removeFavorite(roast: Roast) {

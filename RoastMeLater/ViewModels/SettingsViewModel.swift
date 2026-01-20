@@ -22,6 +22,11 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     @Published var apiTestResult: Bool?
     @Published var isTestingConnection = false
 
+    // Validation Errors
+    @Published var apiKeyError: String?
+    @Published var baseURLError: String?
+    @Published var modelNameError: String?
+
     // Export/Import State
     @Published var isExporting = false
     @Published var isImporting = false
@@ -45,6 +50,10 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     @Published var totalRoastsGenerated = 0
     @Published var totalFavorites = 0
     @Published var mostPopularCategory: RoastCategory?
+
+    // Error State
+    @Published var errorMessage: String?
+    @Published var showError = false
     
     // MARK: - Private Properties
     private let storageService: StorageServiceProtocol
@@ -81,8 +90,8 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
         setupNotificationObservers()
 
         // Force update API configuration on init
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            self.updateAPIConfiguration()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.updateAPIConfiguration()
         }
     }
 
@@ -102,6 +111,14 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     }
 
     private func reloadFromStorage() {
+        // Ensure we're on main thread for UI updates
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.reloadFromStorage()
+            }
+            return
+        }
+
         isReloadingFromStorage = true
 
         let preferences = storageService.getUserPreferences()
@@ -110,9 +127,11 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
         // This ensures all @Published properties are updated correctly
         preferencesSubject.onNext(preferences)
 
+        #if DEBUG
         print("🔄 SettingsViewModel reloadFromStorage:")
         print("  defaultSpiceLevel: \(preferences.defaultSpiceLevel)")
         print("  defaultCategory: \(preferences.defaultCategory.displayName)")
+        #endif
 
         // Reset flag after a short delay to allow UI to update
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
@@ -217,12 +236,21 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
         // Skip if this is triggered by reloadFromStorage to prevent loop
         guard !isReloadingFromStorage else { return }
 
-        // Skip if value hasn't changed
-        guard defaultSpiceLevel != level else { return }
+        // Validate and clamp spice level to valid range
+        let validatedLevel = ValidationService.validateSpiceLevel(level)
 
-        defaultSpiceLevel = level
+        #if DEBUG
+        if level != validatedLevel {
+            print("⚠️ Spice level \(level) was clamped to \(validatedLevel)")
+        }
+        #endif
+
+        // Skip if value hasn't changed
+        guard defaultSpiceLevel != validatedLevel else { return }
+
+        defaultSpiceLevel = validatedLevel
         updatePreferences { preferences in
-            preferences.defaultSpiceLevel = level
+            preferences.defaultSpiceLevel = validatedLevel
         }
 
         // Save immediately to storage for sync (bypass debounce)
@@ -235,6 +263,14 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     func updateDefaultCategory(_ category: RoastCategory) {
         // Skip if this is triggered by reloadFromStorage to prevent loop
         guard !isReloadingFromStorage else { return }
+
+        // Validate category
+        guard ValidationService.isValidCategory(category) else {
+            #if DEBUG
+            print("⚠️ Invalid category attempted: \(category)")
+            #endif
+            return
+        }
 
         // Skip if value hasn't changed
         guard defaultCategory != category else { return }
@@ -256,7 +292,9 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
             let currentPreferences = try preferencesSubject.value()
             storageService.saveUserPreferences(currentPreferences)
         } catch {
+            #if DEBUG
             print("Error saving preferences immediately: \(error)")
+            #endif
         }
     }
 
@@ -305,7 +343,9 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
             update(&currentPreferences)
             preferencesSubject.onNext(currentPreferences)
         } catch {
+            #if DEBUG
             print("Error updating preferences: \(error)")
+            #endif
         }
     }
     
@@ -370,7 +410,9 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
                         itemsProcessed: 0,
                         totalItems: 0
                     )
+                    #if DEBUG
                     print("Export failed: \(error)")
+                    #endif
                 }
             )
             .disposed(by: disposeBag)
@@ -393,14 +435,17 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
                 showExportLocationPicker()
             }
         } catch {
+            #if DEBUG
             print("Failed to find export file: \(error)")
+            #endif
         }
     }
 
     private func showExportLocationPicker() {
         guard let exportURL = pendingExportURL else { return }
 
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             let documentPicker = UIDocumentPickerViewController(forExporting: [exportURL], asCopy: true)
             documentPicker.delegate = self
 
@@ -437,12 +482,16 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
                     },
                     onError: { [weak self] error in
                         self?.pendingImportData = nil // Clear on error
+                        #if DEBUG
                         print("Preview failed: \(error)")
+                        #endif
                     }
                 )
                 .disposed(by: disposeBag)
         } catch {
+            #if DEBUG
             print("Failed to read file: \(error)")
+            #endif
         }
     }
 
@@ -451,7 +500,9 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
 
     func confirmImport(with options: ImportOptions = .merge) {
         guard let importData = pendingImportData else {
+            #if DEBUG
             print("No import data available")
+            #endif
             return
         }
 
@@ -486,7 +537,9 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
                         successCount: 0,
                         errorCount: 0
                     )
+                    #if DEBUG
                     print("Import failed: \(error)")
+                    #endif
                 }
             )
             .disposed(by: disposeBag)
@@ -513,7 +566,9 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
         // Otherwise, this is an import operation
         // Start security-scoped resource access
         guard url.startAccessingSecurityScopedResource() else {
+            #if DEBUG
             print("Failed to access security-scoped resource")
+            #endif
             return
         }
 
@@ -536,16 +591,23 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
 
     // MARK: - API Configuration Methods
     func updateAPIConfiguration() {
+        // Sanitize inputs before saving
+        let sanitizedAPIKey = ValidationService.sanitizeTextInput(apiKey)
+        let sanitizedBaseURL = ValidationService.sanitizeTextInput(baseURL)
+        let sanitizedModelName = ValidationService.sanitizeTextInput(modelName)
+
+        #if DEBUG
         print("🔧 Updating API Configuration:")
-        print("  apiKey: \(apiKey.isEmpty ? "EMPTY" : "HAS_VALUE")")
-        print("  baseURL: \(baseURL)")
-        print("  modelName: \(modelName)")
+        print("  apiKey: \(sanitizedAPIKey.isEmpty ? "EMPTY" : "SET")")
+        print("  baseURL: \(sanitizedBaseURL.isEmpty ? "EMPTY" : "SET")")
+        print("  modelName: \(sanitizedModelName.isEmpty ? "EMPTY" : sanitizedModelName)")
+        #endif
 
         updatePreferences { preferences in
             preferences.apiConfiguration = APIConfiguration(
-                apiKey: apiKey,
-                baseURL: baseURL,
-                modelName: modelName
+                apiKey: sanitizedAPIKey,
+                baseURL: sanitizedBaseURL,
+                modelName: sanitizedModelName
             )
         }
 
@@ -553,12 +615,18 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
         do {
             let currentPreferences = try preferencesSubject.value()
             storageService.saveUserPreferences(currentPreferences)
+            #if DEBUG
             print("✅ API Configuration saved to storage immediately")
+            #endif
         } catch {
+            #if DEBUG
             print("❌ Failed to save API configuration: \(error)")
+            #endif
         }
 
+        #if DEBUG
         print("✅ API Configuration updated")
+        #endif
     }
 
     func clearAPIConfiguration() {
@@ -566,41 +634,113 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
         baseURL = ""
         modelName = ""
         apiTestResult = nil
+        clearValidationErrors()
         updateAPIConfiguration()
     }
 
-    func testAPIConnection() {
-        print("🧪 Testing API Connection...")
-        print("  API Key: \(apiKey.isEmpty ? "EMPTY" : "HAS_VALUE (\(apiKey.count) chars)")")
-        print("  Base URL: \(baseURL.isEmpty ? "EMPTY" : baseURL)")
-        print("  Model: \(modelName)")
+    // MARK: - Validation Methods
 
-        guard !apiKey.isEmpty, !baseURL.isEmpty else {
-            print("❌ Validation failed: API Key or Base URL is empty")
+    func validateAPIKey() {
+        let language = LocalizationManager.shared.currentLanguage
+        let result = ValidationService.validateAPIKey(apiKey, language: language)
+        apiKeyError = result.errorMessage
+    }
+
+    func validateBaseURL() {
+        let language = LocalizationManager.shared.currentLanguage
+        let result = ValidationService.validateBaseURL(baseURL, language: language)
+        baseURLError = result.errorMessage
+    }
+
+    func validateModelName() {
+        let language = LocalizationManager.shared.currentLanguage
+        let result = ValidationService.validateModelName(modelName, language: language)
+        modelNameError = result.errorMessage
+    }
+
+    func validateAllAPIFields() -> Bool {
+        let language = LocalizationManager.shared.currentLanguage
+        let validation = ValidationService.validateAPIConfiguration(
+            apiKey: apiKey,
+            baseURL: baseURL,
+            modelName: modelName,
+            language: language
+        )
+
+        apiKeyError = validation.apiKeyError
+        baseURLError = validation.baseURLError
+        modelNameError = validation.modelNameError
+
+        return validation.isValid
+    }
+
+    func clearValidationErrors() {
+        apiKeyError = nil
+        baseURLError = nil
+        modelNameError = nil
+    }
+
+    var isAPIFormValid: Bool {
+        let apiKeyTrimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseURLTrimmed = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return !apiKeyTrimmed.isEmpty &&
+               !baseURLTrimmed.isEmpty &&
+               apiKeyError == nil &&
+               baseURLError == nil &&
+               modelNameError == nil
+    }
+
+    func testAPIConnection() {
+        #if DEBUG
+        print("🧪 Testing API Connection...")
+        print("  API Key: \(apiKey.isEmpty ? "EMPTY" : "SET")")
+        print("  Base URL: \(baseURL.isEmpty ? "EMPTY" : "SET")")
+        print("  Model: \(modelName.isEmpty ? "EMPTY" : modelName)")
+        #endif
+
+        // Validate all fields first
+        guard validateAllAPIFields() else {
+            #if DEBUG
+            print("❌ Validation failed")
+            #endif
             apiTestResult = false
             return
         }
 
+        #if DEBUG
         print("✅ Validation passed, calling AIService...")
+        #endif
+
+        // Sanitize inputs before use
+        let sanitizedAPIKey = ValidationService.sanitizeTextInput(apiKey)
+        let sanitizedBaseURL = ValidationService.sanitizeTextInput(baseURL)
+        let sanitizedModelName = ValidationService.sanitizeTextInput(modelName)
 
         // Reset previous result and show loading
         apiTestResult = nil
         isTestingConnection = true
 
-        aiService.testAPIConnection(apiKey: apiKey, baseURL: baseURL, modelName: modelName)
+        aiService.testAPIConnection(apiKey: sanitizedAPIKey, baseURL: sanitizedBaseURL, modelName: sanitizedModelName)
             .observe(on: MainScheduler.instance)
             .subscribe(
                 onNext: { [weak self] success in
+                    #if DEBUG
                     print("📡 API Test Result: \(success ? "SUCCESS" : "FAILED")")
+                    #endif
                     self?.isTestingConnection = false
                     self?.apiTestResult = success
                     if success {
+                        #if DEBUG
                         print("💾 Saving API configuration...")
+                        #endif
                         self?.updateAPIConfiguration()
                     }
                 },
                 onError: { [weak self] error in
+                    #if DEBUG
                     print("❌ API Test Error: \(error.localizedDescription)")
+                    #endif
                     self?.isTestingConnection = false
                     self?.apiTestResult = false
                 }
@@ -739,9 +879,13 @@ class SettingsViewModel: NSObject, ObservableObject, UIDocumentPickerDelegate {
     }
 
     private func handleError(_ error: Error) {
-        // Handle errors appropriately
-        print("Error: \(error.localizedDescription)")
-        // You could show an alert or update UI state here
+        let message = ErrorHandler.shared.handle(error)
+        ErrorHandler.shared.logError(error, context: "SettingsViewModel")
+
+        DispatchQueue.main.async { [weak self] in
+            self?.errorMessage = message
+            self?.showError = true
+        }
     }
 }
 

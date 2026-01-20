@@ -3,6 +3,7 @@ import RxSwift
 import RxCocoa
 import UIKit
 import Combine
+import WidgetKit
 
 class RoastGeneratorViewModel: ObservableObject {
     // MARK: - Published Properties
@@ -101,9 +102,11 @@ class RoastGeneratorViewModel: ObservableObject {
         selectedCategory = preferences.defaultCategory
         spiceLevel = preferences.defaultSpiceLevel
 
+        #if DEBUG
         print("🔄 RoastGeneratorViewModel loadUserPreferences:")
         print("  selectedCategory: \(selectedCategory.displayName)")
         print("  spiceLevel: \(spiceLevel)")
+        #endif
 
         // Reset flag after a short delay to allow UI to update
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
@@ -115,19 +118,26 @@ class RoastGeneratorViewModel: ObservableObject {
         guard let userInfo = notification.userInfo,
               let roastId = userInfo["roastId"] as? UUID,
               let isFavorite = userInfo["isFavorite"] as? Bool,
-              let updatedRoast = userInfo["roast"] as? Roast,
-              let currentRoast = currentRoast,
-              currentRoast.id == roastId else { return }
+              let _ = userInfo["roast"] as? Roast else { return }
 
-        print("🔄 RoastGeneratorViewModel.handleFavoriteChange:")
-        print("  roastId: \(roastId)")
-        print("  isFavorite: \(isFavorite)")
+        // Ensure UI updates happen on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self,
+                  let currentRoast = self.currentRoast,
+                  currentRoast.id == roastId else { return }
 
-        // Update current roast with new favorite status
-        var newRoast = currentRoast
-        newRoast.isFavorite = isFavorite
-        roastSubject.onNext(newRoast)
-        self.currentRoast = newRoast
+            #if DEBUG
+            print("🔄 RoastGeneratorViewModel.handleFavoriteChange:")
+            print("  roastId: \(roastId)")
+            print("  isFavorite: \(isFavorite)")
+            #endif
+
+            // Update current roast with new favorite status
+            var newRoast = currentRoast
+            newRoast.isFavorite = isFavorite
+            self.roastSubject.onNext(newRoast)
+            self.currentRoast = newRoast
+        }
     }
 
     private func saveUserPreferences() {
@@ -136,22 +146,28 @@ class RoastGeneratorViewModel: ObservableObject {
         preferences.defaultSpiceLevel = spiceLevel
         storageService.saveUserPreferences(preferences)
 
+        #if DEBUG
         print("💾 Saved user preferences:")
         print("  selectedCategory: \(selectedCategory.displayName)")
         print("  spiceLevel: \(spiceLevel)")
+        #endif
     }
 
     private func loadInitialRoast() {
+        #if DEBUG
         print("📱 loadInitialRoast called")
+        #endif
 
         // Check if API is configured to show appropriate welcome message
         let preferences = storageService.getUserPreferences()
         let isAPIConfigured = !preferences.apiConfiguration.apiKey.isEmpty && !preferences.apiConfiguration.baseURL.isEmpty
 
+        #if DEBUG
         print("🔍 Initial Load - API Config Check:")
-        print("  apiKey: \(preferences.apiConfiguration.apiKey.isEmpty ? "EMPTY" : "HAS_VALUE (\(preferences.apiConfiguration.apiKey.count) chars)")")
-        print("  baseURL: \(preferences.apiConfiguration.baseURL.isEmpty ? "EMPTY" : preferences.apiConfiguration.baseURL)")
+        print("  apiKey: \(preferences.apiConfiguration.apiKey.isEmpty ? "EMPTY" : "SET")")
+        print("  baseURL: \(preferences.apiConfiguration.baseURL.isEmpty ? "EMPTY" : "SET")")
         print("  isAPIConfigured: \(isAPIConfigured)")
+        #endif
 
         let welcomeContent = isAPIConfigured
             ? "Chào mừng bạn đến với RoastMe! Sẵn sàng để được 'nướng' một chút chưa? 🔥"
@@ -170,62 +186,100 @@ class RoastGeneratorViewModel: ObservableObject {
             // Use the most recent roast if it was created within the last hour
             let oneHourAgo = Date().addingTimeInterval(-3600)
             if lastRoast.createdAt > oneHourAgo {
+                #if DEBUG
                 print("✅ Using recent roast from storage")
+                #endif
                 roastSubject.onNext(lastRoast)
                 return
             }
         }
 
         // Use welcome roast if no recent roast found
+        #if DEBUG
         print("✅ Using welcome roast")
+        #endif
         roastSubject.onNext(welcomeRoast)
     }
 
     // MARK: - Public Methods
     func generateRoast(category: RoastCategory, spiceLevel: Int, language: String? = nil) {
+        #if DEBUG
         print("🚀 generateRoast called")
+        #endif
+
+        // Validate category
+        guard ValidationService.isValidCategory(category) else {
+            #if DEBUG
+            print("❌ Invalid category: \(category)")
+            #endif
+            errorSubject.onNext("Invalid category selected")
+            return
+        }
+
+        // Validate and clamp spice level
+        let validatedSpiceLevel = ValidationService.validateSpiceLevel(spiceLevel)
+        #if DEBUG
+        if spiceLevel != validatedSpiceLevel {
+            print("⚠️ Spice level \(spiceLevel) was clamped to \(validatedSpiceLevel)")
+        }
+        #endif
+
         let preferences = storageService.getUserPreferences()
 
+        #if DEBUG
         print("🔍 Checking API Configuration:")
-        print("  apiKey: \(preferences.apiConfiguration.apiKey.isEmpty ? "EMPTY" : "HAS_VALUE (\(preferences.apiConfiguration.apiKey.count) chars)")")
-        print("  baseURL: \(preferences.apiConfiguration.baseURL.isEmpty ? "EMPTY" : preferences.apiConfiguration.baseURL)")
+        print("  apiKey: \(preferences.apiConfiguration.apiKey.isEmpty ? "EMPTY" : "SET")")
+        print("  baseURL: \(preferences.apiConfiguration.baseURL.isEmpty ? "EMPTY" : "SET")")
         print("  modelName: \(preferences.apiConfiguration.modelName.isEmpty ? "EMPTY" : preferences.apiConfiguration.modelName)")
+        #endif
 
         // Check if API is configured
         if preferences.apiConfiguration.apiKey.isEmpty || preferences.apiConfiguration.baseURL.isEmpty {
+            #if DEBUG
             print("❌ API not configured - showing setup")
             print("  apiKey isEmpty: \(preferences.apiConfiguration.apiKey.isEmpty)")
             print("  baseURL isEmpty: \(preferences.apiConfiguration.baseURL.isEmpty)")
+            #endif
             showAPISetup = true
             return
         }
 
+        #if DEBUG
         print("✅ API is configured, proceeding with generation")
+        #endif
         loadingSubject.onNext(true)
 
+        #if DEBUG
         print("🎯 Generate Roast - API Config:")
-        print("  apiKey: \(preferences.apiConfiguration.apiKey.isEmpty ? "EMPTY" : "HAS_VALUE")")
-        print("  baseURL: \(preferences.apiConfiguration.baseURL)")
+        print("  apiKey: \(preferences.apiConfiguration.apiKey.isEmpty ? "EMPTY" : "SET")")
+        print("  baseURL: \(preferences.apiConfiguration.baseURL.isEmpty ? "EMPTY" : "SET")")
         print("  modelName: \(preferences.apiConfiguration.modelName)")
         print("  category: \(category.displayName)")
-        print("  spiceLevel: \(spiceLevel)")
+        print("  spiceLevel: \(validatedSpiceLevel)")
         print("  language: Auto-detect from LocalizationManager")
+        #endif
 
         let finalSpiceLevel = preferences.safetyFiltersEnabled ?
-            min(spiceLevel, 5) : spiceLevel  // Allow up to level 5 even with safety filter
+            min(validatedSpiceLevel, 5) : validatedSpiceLevel  // Allow up to level 5 even with safety filter
 
         aiService.generateRoast(
             category: category,
             spiceLevel: finalSpiceLevel,
             language: nil  // Use LocalizationManager.shared.currentLanguage
         )
+        .timeout(.seconds(30), scheduler: MainScheduler.instance)
         .observe(on: MainScheduler.instance)
         .subscribe(
             onNext: { [weak self] roast in
                 self?.handleGeneratedRoast(roast, preferences: preferences)
             },
             onError: { [weak self] error in
-                self?.handleError(error)
+                // Handle RxSwift timeout error
+                if case RxError.timeout = error {
+                    self?.handleError(AIServiceError.networkTimeout)
+                } else {
+                    self?.handleError(error)
+                }
             }
         )
         .disposed(by: disposeBag)
@@ -251,6 +305,9 @@ class RoastGeneratorViewModel: ObservableObject {
         // Save to storage
         storageService.saveRoast(finalRoast)
 
+        // Refresh widget to show new roast
+        WidgetCenter.shared.reloadAllTimelines()
+
         // Update UI
         roastSubject.onNext(finalRoast)
         loadingSubject.onNext(false)
@@ -258,21 +315,19 @@ class RoastGeneratorViewModel: ObservableObject {
     
     private func handleError(_ error: Error) {
         loadingSubject.onNext(false)
-        
-        let errorMessage: String
-        if let aiError = error as? AIServiceError {
-            errorMessage = aiError.localizedDescription
-        } else {
-            errorMessage = "Có lỗi xảy ra khi tạo roast. Vui lòng thử lại!"
-        }
-        
+
+        let errorMessage = ErrorHandler.shared.handle(error)
+        ErrorHandler.shared.logError(error, context: "RoastGeneratorViewModel.generateRoast")
+
         errorSubject.onNext(errorMessage)
     }
     
     func toggleFavorite(roast: Roast) {
+        #if DEBUG
         print("🔄 RoastGeneratorViewModel.toggleFavorite:")
         print("  roast.id: \(roast.id)")
         print("  roast.isFavorite BEFORE: \(roast.isFavorite)")
+        #endif
 
         storageService.toggleFavorite(roastId: roast.id)
 
@@ -280,7 +335,9 @@ class RoastGeneratorViewModel: ObservableObject {
         if let currentRoast = currentRoast, currentRoast.id == roast.id {
             var updatedRoast = currentRoast
             updatedRoast.isFavorite.toggle()
+            #if DEBUG
             print("  updatedRoast.isFavorite AFTER: \(updatedRoast.isFavorite)")
+            #endif
             roastSubject.onNext(updatedRoast)
         }
     }
@@ -320,9 +377,12 @@ class RoastGeneratorViewModel: ObservableObject {
     
     // MARK: - Reactive Methods
     func generateRoastReactive(category: RoastCategory, spiceLevel: Int, language: String? = nil) -> Observable<Roast> {
+        // Validate and clamp spice level
+        let validatedSpiceLevel = ValidationService.validateSpiceLevel(spiceLevel)
+
         let preferences = storageService.getUserPreferences()
         let finalSpiceLevel = preferences.safetyFiltersEnabled ?
-            min(spiceLevel, 5) : spiceLevel  // Allow up to level 5 even with safety filter
+            min(validatedSpiceLevel, 5) : validatedSpiceLevel  // Allow up to level 5 even with safety filter
 
         return aiService.generateRoast(
             category: category,
@@ -364,6 +424,14 @@ class RoastGeneratorViewModel: ObservableObject {
         // Skip if this is triggered by loadUserPreferences to prevent loop
         guard !isReloadingFromSettings else { return }
 
+        // Validate category
+        guard ValidationService.isValidCategory(category) else {
+            #if DEBUG
+            print("⚠️ Invalid category attempted: \(category)")
+            #endif
+            return
+        }
+
         // Skip if value hasn't changed
         guard selectedCategory != category else { return }
 
@@ -377,10 +445,19 @@ class RoastGeneratorViewModel: ObservableObject {
         // Skip if this is triggered by loadUserPreferences to prevent loop
         guard !isReloadingFromSettings else { return }
 
-        // Skip if value hasn't changed
-        guard spiceLevel != level else { return }
+        // Validate and clamp spice level to valid range
+        let validatedLevel = ValidationService.validateSpiceLevel(level)
 
-        spiceLevel = level
+        #if DEBUG
+        if level != validatedLevel {
+            print("⚠️ Spice level \(level) was clamped to \(validatedLevel)")
+        }
+        #endif
+
+        // Skip if value hasn't changed
+        guard spiceLevel != validatedLevel else { return }
+
+        spiceLevel = validatedLevel
         saveUserPreferences()
         // Notify SettingsView to sync spice level (pass self to identify source)
         NotificationCenter.default.post(name: .settingsDidChange, object: self)

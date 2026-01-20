@@ -7,191 +7,27 @@ struct RoastGeneratorView: View {
     @State private var showingCategoryPicker = false
     @State private var isGenerating = false
     @State private var showCopySuccess = false
-    
+    @State private var showingSharePreview = false
+
+    private let primaryColor = Constants.UI.Colors.primary
+    private let accentColor = Constants.UI.Colors.accent
+
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Simple Header
-                    VStack(spacing: 12) {
-                        Image(systemName: "flame.fill")
-                            .font(.system(size: 40))
-                            .foregroundColor(.orange)
-                            .scaleEffect(isGenerating ? 1.1 : 1.0)
-                            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isGenerating)
+        ZStack {
+            Color(.systemGroupedBackground)
+                .ignoresSafeArea()
 
-                        Text("RoastMe")
-                            .font(.title.weight(.bold))
-                            .foregroundColor(.primary)
-                    }
-                    .padding(.top, 10)
-
-                    // Current Roast Display - Only show ONE roast at a time
-                    Group {
-                        if let currentRoast = viewModel.currentRoast {
-                            RoastCardView(
-                                roast: currentRoast,
-                                onFavoriteToggle: {
-                                    viewModel.toggleFavorite(roast: currentRoast)
-                                },
-                                onCopy: {
-                                    viewModel.copyRoastToClipboard()
-                                    showCopySuccess = true
-
-                                    // Hide the success message after 2 seconds
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                        showCopySuccess = false
-                                    }
-                                },
-                                onShare: {
-                                    viewModel.shareRoast(currentRoast)
-                                }
-                            )
-                            .id(currentRoast.id) // Force view recreation when roast changes
-                        } else {
-                            RoastPlaceholderView()
-                                .id("placeholder") // Unique ID for placeholder
-                        }
-                    }
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                    .animation(.easeInOut(duration: 0.4), value: viewModel.currentRoast?.id)
-                
-                    // Controls Section
-                    VStack(spacing: 20) {
-                        // Category Selection
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Image(systemName: "tag.fill")
-                                    .foregroundColor(.orange)
-                                Text(localizationManager.category)
-                                    .font(.headline.weight(.semibold))
-                                Spacer()
-                            }
-
-                            Button(action: {
-                                showingCategoryPicker = true
-                                // Haptic feedback
-                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                                impactFeedback.impactOccurred()
-                            }) {
-                                HStack(spacing: 12) {
-                                    Image(systemName: viewModel.selectedCategory.icon)
-                                        .foregroundColor(.orange)
-                                        .frame(width: 24, height: 24)
-
-                                    Text(localizationManager.categoryName(viewModel.selectedCategory))
-                                        .font(.body.weight(.medium))
-                                        .foregroundColor(.primary)
-
-                                    Spacer()
-
-                                    Image(systemName: "chevron.down")
-                                        .foregroundColor(.secondary)
-                                        .font(.caption)
-                                }
-                                .padding(12)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(12)
-                            }
-                        }
-
-                        // Spice Level
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Image(systemName: "flame.fill")
-                                    .foregroundColor(.orange)
-                                Text(localizationManager.spiceLevel)
-                                    .font(.headline.weight(.semibold))
-
-                                Spacer()
-
-                                Text("\(viewModel.spiceLevel)/5")
-                                    .font(.title3.weight(.bold))
-                                    .foregroundColor(.orange)
-                            }
-
-                            HStack(spacing: 8) {
-                                ForEach(1...5, id: \.self) { level in
-                                    Button(action: {
-                                        viewModel.updateSpiceLevel(level)
-                                        // Haptic feedback
-                                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                                        impactFeedback.impactOccurred()
-                                    }) {
-                                        Image(systemName: level <= viewModel.spiceLevel ? "flame.fill" : "flame")
-                                            .font(.title2)
-                                            .foregroundColor(level <= viewModel.spiceLevel ? .orange : .gray.opacity(0.4))
-                                            .scaleEffect(level <= viewModel.spiceLevel ? 1.1 : 1.0)
-                                            .animation(.easeInOut(duration: 0.2), value: viewModel.spiceLevel)
-                                    }
-                                }
-
-                                Spacer()
-
-                                Text(getSpiceLevelDescription(viewModel.spiceLevel))
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .italic()
-                            }
-                            .padding(12)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
-                        }
-
-                        // Generate Button
-                        Button(action: generateRoast) {
-                            HStack {
-                                if isGenerating {
-                                    ProgressView()
-                                        .scaleEffect(0.8)
-                                } else {
-                                    Image(systemName: "sparkles")
-                                }
-                                Text(isGenerating ? localizationManager.generating : localizationManager.generateRoast)
-                            }
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(
-                                LinearGradient(
-                                    colors: [.orange, .red],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .cornerRadius(12)
-                        }
-                        .disabled(isGenerating)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 30)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 20) {
+                    roastDisplaySection
+                    controlsSection
+                    generateButton
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
-            .navigationBarHidden(true)
         }
-        .overlay(
-            // Copy success toast
-            VStack {
-                if showCopySuccess {
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        Text("Đã copy vào clipboard!")
-                            .font(.subheadline)
-                            .foregroundColor(.primary)
-                    }
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(10)
-                    .shadow(radius: 5)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                }
-                Spacer()
-            }
-            .padding(.top, 50)
-            .animation(.easeInOut(duration: 0.3), value: showCopySuccess)
-        )
+        .overlay(toastOverlay)
         .sheet(isPresented: $showingCategoryPicker) {
             CategoryPickerView(
                 selectedCategory: viewModel.selectedCategory,
@@ -203,18 +39,217 @@ struct RoastGeneratorView: View {
         .sheet(isPresented: $viewModel.showAPISetup) {
             APISetupView()
         }
+        .sheet(isPresented: $showingSharePreview) {
+            if let currentRoast = viewModel.currentRoast {
+                SharePreviewView(roast: currentRoast)
+            }
+        }
+        .alert(
+            localizationManager.currentLanguage == "en" ? "Error" : "Lỗi",
+            isPresented: $viewModel.showError
+        ) {
+            Button(localizationManager.currentLanguage == "en" ? "OK" : "Đồng ý", role: .cancel) {
+                viewModel.showError = false
+            }
+            Button(localizationManager.currentLanguage == "en" ? "Retry" : "Thử lại") {
+                viewModel.showError = false
+                generateRoast()
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? (localizationManager.currentLanguage == "en" ? "An error occurred" : "Có lỗi xảy ra"))
+        }
         .onReceive(viewModel.$isLoading) { loading in
             isGenerating = loading
         }
     }
-    
-    private func generateRoast() {
-        // Haptic feedback for generate action
-        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-        impactFeedback.impactOccurred()
 
-        // Directly generate new roast without clearing current one
-        // This keeps the current roast visible until new one is ready
+    // MARK: - Roast Display Section
+    private var roastDisplaySection: some View {
+        Group {
+            if let currentRoast = viewModel.currentRoast {
+                RoastCardView(
+                    roast: currentRoast,
+                    onFavoriteToggle: { viewModel.toggleFavorite(roast: currentRoast) },
+                    onCopy: {
+                        viewModel.copyRoastToClipboard()
+                        showCopySuccess = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            showCopySuccess = false
+                        }
+                    },
+                    onShare: { showingSharePreview = true }
+                )
+                .id(currentRoast.id)
+            } else {
+                RoastPlaceholderView()
+                    .id("placeholder")
+            }
+        }
+        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+        .animation(.easeInOut(duration: 0.3), value: viewModel.currentRoast?.id)
+    }
+
+    // MARK: - Controls Section
+    private var controlsSection: some View {
+        VStack(spacing: 12) {
+            categorySelector
+            spiceLevelSelector
+        }
+        .padding(16)
+        .background(Color(.systemBackground))
+        .cornerRadius(16)
+    }
+
+    private var categorySelector: some View {
+        Button(action: {
+            showingCategoryPicker = true
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(primaryColor.opacity(0.12))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: viewModel.selectedCategory.icon)
+                        .font(.body.weight(.semibold))
+                        .foregroundColor(primaryColor)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(localizationManager.category)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(localizationManager.categoryName(viewModel.selectedCategory))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.primary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.secondary)
+            }
+            .padding(12)
+            .background(Color(.systemGray6))
+            .cornerRadius(12)
+        }
+        .accessibilityLabel("\(localizationManager.category): \(localizationManager.categoryName(viewModel.selectedCategory))")
+        .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to change category" : "Nhấn đúp để thay đổi danh mục")
+    }
+
+    private var spiceLevelSelector: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text(localizationManager.spiceLevel)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text(getSpiceLevelDescription(viewModel.spiceLevel))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(primaryColor)
+            }
+
+            HStack(spacing: 0) {
+                ForEach(1...5, id: \.self) { level in
+                    Button(action: {
+                        viewModel.updateSpiceLevel(level)
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: level <= viewModel.spiceLevel ? "flame.fill" : "flame")
+                                .font(.title3)
+                                .foregroundColor(level <= viewModel.spiceLevel ? getFlameColor(level) : Color(.systemGray4))
+                            Text("\(level)")
+                                .font(.caption2.weight(.medium))
+                                .foregroundColor(level <= viewModel.spiceLevel ? .primary : .secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(
+                            level == viewModel.spiceLevel ?
+                            primaryColor.opacity(0.1) : Color.clear
+                        )
+                        .cornerRadius(8)
+                    }
+                    .accessibilityLabel(localizationManager.currentLanguage == "en" ? "Spice level \(level)" : "Độ cay \(level)")
+                    .accessibilityHint(level == viewModel.spiceLevel
+                        ? (localizationManager.currentLanguage == "en" ? "Currently selected" : "Đang được chọn")
+                        : (localizationManager.currentLanguage == "en" ? "Double tap to select" : "Nhấn đúp để chọn"))
+                    .accessibilityAddTraits(level == viewModel.spiceLevel ? .isSelected : [])
+                }
+            }
+            .padding(4)
+            .background(Color(.systemGray6))
+            .cornerRadius(12)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(localizationManager.spiceLevel)
+    }
+
+    // MARK: - Generate Button
+    private var generateButton: some View {
+        Button(action: generateRoast) {
+            HStack(spacing: 10) {
+                if isGenerating {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.9)
+                } else {
+                    Image(systemName: "sparkles")
+                        .font(.headline)
+                }
+                Text(isGenerating ? localizationManager.generating : localizationManager.generateRoast)
+                    .font(.headline)
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .background(
+                LinearGradient(
+                    colors: [Constants.UI.Colors.gradientStart, Constants.UI.Colors.gradientEnd],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .cornerRadius(14)
+            .shadow(color: primaryColor.opacity(0.3), radius: 8, x: 0, y: 4)
+        }
+        .disabled(isGenerating)
+        .opacity(isGenerating ? 0.8 : 1.0)
+        .accessibilityLabel(isGenerating ? localizationManager.generating : localizationManager.generateRoast)
+        .accessibilityHint(isGenerating
+            ? (localizationManager.currentLanguage == "en" ? "Please wait while generating" : "Vui lòng đợi trong khi tạo")
+            : (localizationManager.currentLanguage == "en" ? "Double tap to generate a new roast" : "Nhấn đúp để tạo roast mới"))
+        .accessibilityAddTraits(.isButton)
+    }
+
+    // MARK: - Toast Overlay
+    private var toastOverlay: some View {
+        VStack {
+            if showCopySuccess {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text(localizationManager.currentLanguage == "en" ? "Copied!" : "Đã copy!")
+                        .font(.subheadline.weight(.medium))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color(.systemBackground))
+                .cornerRadius(20)
+                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            Spacer()
+        }
+        .padding(.top, 60)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showCopySuccess)
+    }
+
+    // MARK: - Actions
+    private func generateRoast() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         viewModel.generateRoast(category: viewModel.selectedCategory, spiceLevel: viewModel.spiceLevel)
     }
 
@@ -222,25 +257,14 @@ struct RoastGeneratorView: View {
         return localizationManager.spiceLevelName(level)
     }
 
-    private func getSpiceLevelEmoji(_ level: Int) -> String {
-        switch level {
-        case 1: return "😊"
-        case 2: return "😄"
-        case 3: return "😏"
-        case 4: return "🔥"
-        case 5: return "💀"
-        default: return "😏"
-        }
-    }
-
     private func getFlameColor(_ level: Int) -> Color {
         switch level {
-        case 1: return .orange.opacity(0.6)
-        case 2: return .orange.opacity(0.8)
-        case 3: return .orange
-        case 4: return .red.opacity(0.8)
-        case 5: return .red
-        default: return .orange
+        case 1: return Constants.UI.Colors.accent
+        case 2: return Constants.UI.Colors.accent
+        case 3: return Constants.UI.Colors.primary
+        case 4: return Constants.UI.Colors.primary
+        case 5: return Constants.UI.Colors.gradientEnd
+        default: return Constants.UI.Colors.primary
         }
     }
 }
@@ -253,178 +277,123 @@ struct RoastCardView: View {
     let onShare: () -> Void
     @State private var showCopyFeedback = false
 
+    private let primaryColor = Constants.UI.Colors.primary
+    private let accentColor = Constants.UI.Colors.accent
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Header with category and spice level
-            HStack {
-                HStack(spacing: 8) {
-                    Image(systemName: roast.category.icon)
-                        .foregroundColor(.orange)
-                        .frame(width: 20, height: 20)
-                        .background(Color.orange.opacity(0.1))
-                        .cornerRadius(6)
+        VStack(alignment: .leading, spacing: 14) {
+            headerSection
+            contentSection
+            actionSection
+        }
+        .padding(16)
+        .background(Color(.systemBackground))
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
+    }
 
-                    Text(localizationManager.categoryName(roast.category))
-                        .font(.subheadline.weight(.medium))
-                        .foregroundColor(.primary)
-                }
-
-                Spacer()
-
-                // Spice level indicator
-                HStack(spacing: 4) {
-                    ForEach(1...roast.spiceLevel, id: \.self) { level in
-                        Image(systemName: "flame.fill")
-                            .font(.caption)
-                            .foregroundColor(getFlameColor(level))
-                    }
-                    Text("\(roast.spiceLevel)/5")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color(.systemGray6))
-                .cornerRadius(8)
-            }
-
-            // Main roast content with better typography
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: "quote.bubble.fill")
-                        .foregroundColor(.orange.opacity(0.6))
-                        .font(.caption)
-                    Text("Roast của bạn:")
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-
-                Text(roast.content)
-                    .font(.body.weight(.medium))
-                    .lineSpacing(4)
+    // MARK: - Header
+    private var headerSection: some View {
+        HStack {
+            HStack(spacing: 8) {
+                Image(systemName: roast.category.icon)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(primaryColor)
+                Text(localizationManager.categoryName(roast.category))
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(.primary)
-                    .padding(.leading, 8)
-                    .overlay(
-                        Rectangle()
-                            .fill(Color.orange.opacity(0.3))
-                            .frame(width: 3)
-                            .cornerRadius(1.5),
-                        alignment: .leading
-                    )
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(primaryColor.opacity(0.1))
+            .cornerRadius(8)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(localizationManager.currentLanguage == "en" ? "Category: \(localizationManager.categoryName(roast.category))" : "Danh mục: \(localizationManager.categoryName(roast.category))")
 
-            // Action buttons with responsive layout
-            VStack(spacing: 12) {
-                // Timestamp row
-                HStack {
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                        Text(roast.createdAt, style: .time)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+            Spacer()
+
+            HStack(spacing: 3) {
+                ForEach(1...roast.spiceLevel, id: \.self) { level in
+                    Image(systemName: "flame.fill")
+                        .font(.caption2)
+                        .foregroundColor(getFlameColor(level))
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(localizationManager.currentLanguage == "en" ? "Spice level \(roast.spiceLevel) of 5" : "Độ cay \(roast.spiceLevel) trên 5")
+        }
+    }
+
+    // MARK: - Content
+    private var contentSection: some View {
+        Text(roast.content)
+            .font(.body)
+            .lineSpacing(5)
+            .foregroundColor(.primary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 4)
+            .accessibilityLabel(roast.content)
+    }
+
+    // MARK: - Actions
+    private var actionSection: some View {
+        HStack(spacing: 0) {
+            Text(roast.createdAt, style: .time)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .accessibilityLabel(localizationManager.currentLanguage == "en" ? "Created at \(roast.createdAt, style: .time)" : "Tạo lúc \(roast.createdAt, style: .time)")
+
+            Spacer()
+
+            HStack(spacing: 16) {
+                Button(action: {
+                    onCopy()
+                    showCopyFeedback = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        showCopyFeedback = false
                     }
-                    Spacer()
+                }) {
+                    Image(systemName: showCopyFeedback ? "checkmark" : "doc.on.doc")
+                        .font(.body)
+                        .foregroundColor(showCopyFeedback ? .green : .secondary)
                 }
+                .accessibilityLabel(showCopyFeedback
+                    ? (localizationManager.currentLanguage == "en" ? "Copied" : "Đã sao chép")
+                    : (localizationManager.currentLanguage == "en" ? "Copy roast" : "Sao chép roast"))
+                .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to copy roast to clipboard" : "Nhấn đúp để sao chép roast")
 
-                // Action buttons - responsive layout
-                HStack(spacing: 12) {
-                    actionButtons
+                Button(action: onShare) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.body)
+                        .foregroundColor(primaryColor)
                 }
-            }
-        }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.orange.opacity(0.2), lineWidth: 1)
-        )
-        .padding(.horizontal)
-    }
+                .accessibilityLabel(localizationManager.currentLanguage == "en" ? "Share roast" : "Chia sẻ roast")
+                .accessibilityHint(localizationManager.currentLanguage == "en" ? "Double tap to share this roast" : "Nhấn đúp để chia sẻ roast này")
 
-    // MARK: - Action Button Components
-    @ViewBuilder
-    private var actionButtons: some View {
-        // Use flexible layout that wraps naturally on small screens
-        HStack(spacing: 8) {
-            copyButton
-                .layoutPriority(1)
-            shareButton
-                .layoutPriority(1)
-            favoriteButton
-                .layoutPriority(1)
-        }
-    }
-
-    private var copyButton: some View {
-        Button(action: {
-            onCopy()
-            showCopyFeedback = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                showCopyFeedback = false
+                Button(action: onFavoriteToggle) {
+                    Image(systemName: roast.isFavorite ? "heart.fill" : "heart")
+                        .font(.body)
+                        .foregroundColor(roast.isFavorite ? .red : .secondary)
+                }
+                .accessibilityLabel(roast.isFavorite
+                    ? (localizationManager.currentLanguage == "en" ? "Remove from favorites" : "Xóa khỏi yêu thích")
+                    : (localizationManager.currentLanguage == "en" ? "Add to favorites" : "Thêm vào yêu thích"))
+                .accessibilityHint(roast.isFavorite
+                    ? (localizationManager.currentLanguage == "en" ? "Double tap to remove from favorites" : "Nhấn đúp để xóa khỏi yêu thích")
+                    : (localizationManager.currentLanguage == "en" ? "Double tap to add to favorites" : "Nhấn đúp để thêm vào yêu thích"))
             }
-        }) {
-            HStack(spacing: 3) {
-                Image(systemName: showCopyFeedback ? "checkmark" : "doc.on.doc")
-                    .font(.caption)
-                Text(showCopyFeedback ? "Copied!" : "Copy")
-                    .font(.caption2.weight(.medium))
-            }
-            .foregroundColor(showCopyFeedback ? .green : .blue)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(Color(.systemGray6))
-            .cornerRadius(6)
         }
-        .animation(.easeInOut(duration: 0.2), value: showCopyFeedback)
-    }
-
-    private var shareButton: some View {
-        Button(action: onShare) {
-            HStack(spacing: 3) {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.caption)
-                Text("Share")
-                    .font(.caption2.weight(.medium))
-            }
-            .foregroundColor(.orange)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(Color(.systemGray6))
-            .cornerRadius(6)
-        }
-    }
-
-    private var favoriteButton: some View {
-        Button(action: onFavoriteToggle) {
-            HStack(spacing: 3) {
-                Image(systemName: roast.isFavorite ? "heart.fill" : "heart")
-                    .font(.caption)
-                Text(roast.isFavorite ? "Liked" : "Like")
-                    .font(.caption2.weight(.medium))
-            }
-            .foregroundColor(roast.isFavorite ? .red : .gray)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(Color(.systemGray6))
-            .cornerRadius(6)
-        }
+        .padding(.top, 4)
     }
 
     private func getFlameColor(_ level: Int) -> Color {
         switch level {
-        case 1: return .orange.opacity(0.6)
-        case 2: return .orange.opacity(0.8)
-        case 3: return .orange
-        case 4: return .red.opacity(0.8)
-        case 5: return .red
-        default: return .orange
+        case 1: return Constants.UI.Colors.accent
+        case 2: return Constants.UI.Colors.accent
+        case 3: return Constants.UI.Colors.primary
+        case 4: return Constants.UI.Colors.primary
+        case 5: return Constants.UI.Colors.gradientEnd
+        default: return Constants.UI.Colors.primary
         }
     }
 }
@@ -432,23 +401,27 @@ struct RoastCardView: View {
 struct RoastPlaceholderView: View {
     @EnvironmentObject var localizationManager: LocalizationManager
 
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "quote.bubble")
-                .font(.system(size: 50))
-                .foregroundColor(.gray.opacity(0.5))
+    private let primaryColor = Constants.UI.Colors.primary
 
-            Text(localizationManager.currentLanguage == "en" ? "Choose category and spice level, then tap generate roast!" : "Chọn danh mục và mức độ cay, sau đó nhấn tạo roast!")
-                .font(.headline)
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "flame")
+                .font(.largeTitle)
+                .foregroundColor(primaryColor.opacity(0.4))
+                .accessibilityHidden(true)
+
+            Text(localizationManager.currentLanguage == "en" ? "Tap the button below to generate a roast!" : "Nhấn nút bên dưới để tạo roast!")
+                .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
         }
-        .padding()
+        .padding(24)
         .frame(maxWidth: .infinity)
-        .frame(height: 150)
-        .background(Color(.systemGray6))
+        .background(Color(.systemBackground))
         .cornerRadius(16)
-        .padding(.horizontal)
+        .shadow(color: .black.opacity(0.04), radius: 6, x: 0, y: 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(localizationManager.currentLanguage == "en" ? "No roast yet. Tap the button below to generate a roast!" : "Chưa có roast. Nhấn nút bên dưới để tạo roast!")
     }
 }
 
@@ -458,80 +431,58 @@ struct CategoryPickerView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var localizationManager: LocalizationManager
 
+    private let primaryColor = Constants.UI.Colors.primary
+
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                // Header
-                VStack(spacing: 16) {
-                    Image(systemName: "tag.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(.orange)
+            ScrollView {
+                VStack(spacing: 20) {
+                    Text(localizationManager.currentLanguage == "en" ? "Choose a category" : "Chọn danh mục")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 8)
 
-                    VStack(spacing: 8) {
-                        Text(localizationManager.selectCategory)
-                            .font(.title2.weight(.bold))
-
-                        Text(localizationManager.currentLanguage == "en" ? "Choose the work situation you want to be roasted about" : "Chọn tình huống công việc bạn muốn được roast")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                }
-                .padding(.top, 20)
-                .padding(.horizontal)
-
-                // Categories Grid
-                ScrollView {
                     LazyVGrid(columns: [
                         GridItem(.flexible()),
                         GridItem(.flexible())
-                    ], spacing: 16) {
+                    ], spacing: 12) {
                         ForEach(RoastCategory.allCases, id: \.self) { category in
                             CategoryCard(
                                 category: category,
                                 isSelected: category == selectedCategory,
                                 onTap: {
                                     onCategorySelected(category)
-
-                                    // Haptic feedback
-                                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                                    impactFeedback.impactOccurred()
-
-                                    // Delay dismiss for better UX
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                                         dismiss()
                                     }
                                 }
                             )
                         }
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 24)
-                    .padding(.bottom, 100)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 40)
                 }
             }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle(localizationManager.selectCategory)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Hủy") {
+                    Button(localizationManager.currentLanguage == "en" ? "Cancel" : "Hủy") {
                         dismiss()
                     }
                     .foregroundColor(.secondary)
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if #available(iOS 16.0, *) {
-                        Button(localizationManager.done) {
-                            dismiss()
-                        }
-                        .foregroundColor(.orange)
-                        .font(.body.weight(.semibold))
-                    } else {
-                        Button(localizationManager.done) {
-                            dismiss()
-                        }
-                        .foregroundColor(.orange)
+                    Button {
+                        dismiss()
+                    } label: {
+                        Text(localizationManager.done)
+                            .fontWeight(.semibold)
                     }
+                    .foregroundColor(primaryColor)
                 }
             }
         }
@@ -544,63 +495,44 @@ struct CategoryCard: View {
     let onTap: () -> Void
     @EnvironmentObject var localizationManager: LocalizationManager
 
+    private let primaryColor = Constants.UI.Colors.primary
+
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 12) {
-                // Icon with background
+            VStack(spacing: 10) {
                 ZStack {
                     Circle()
-                        .fill(isSelected ? Color.orange : Color.orange.opacity(0.1))
-                        .frame(width: 50, height: 50)
+                        .fill(isSelected ? primaryColor : primaryColor.opacity(0.1))
+                        .frame(width: 44, height: 44)
 
                     Image(systemName: category.icon)
-                        .font(.title2)
-                        .foregroundColor(isSelected ? .white : .orange)
+                        .font(.body.weight(.semibold))
+                        .foregroundColor(isSelected ? .white : primaryColor)
                 }
 
-                // Title and description
-                VStack(spacing: 4) {
-                    Text(localizationManager.categoryName(category))
-                        .font(.headline.weight(.semibold))
-                        .foregroundColor(.primary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-
-                    Text(localizationManager.categoryDescription(category))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(3)
-                }
-
-                // Selection indicator
-                if isSelected {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                            .font(.caption)
-                        Text(localizationManager.currentLanguage == "en" ? "Selected" : "Đã chọn")
-                            .font(.caption2.weight(.medium))
-                            .foregroundColor(.green)
-                    }
-                }
+                Text(localizationManager.categoryName(category))
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
             }
-            .padding(16)
+            .padding(12)
             .frame(maxWidth: .infinity)
-            .frame(height: 140)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(.systemBackground))
-                    .shadow(color: .black.opacity(isSelected ? 0.15 : 0.08), radius: isSelected ? 12 : 6, x: 0, y: isSelected ? 6 : 2)
-            )
+            .frame(height: 110)
+            .background(Color(.systemBackground))
+            .cornerRadius(14)
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(isSelected ? Color.orange : Color.clear, lineWidth: 2)
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(isSelected ? primaryColor : Color.clear, lineWidth: 2)
             )
-            .scaleEffect(isSelected ? 1.02 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+            .shadow(color: .black.opacity(isSelected ? 0.08 : 0.04), radius: isSelected ? 6 : 3, x: 0, y: 2)
         }
         .buttonStyle(PlainButtonStyle())
+        .accessibilityLabel(localizationManager.categoryName(category))
+        .accessibilityHint(isSelected
+            ? (localizationManager.currentLanguage == "en" ? "Currently selected" : "Đang được chọn")
+            : (localizationManager.currentLanguage == "en" ? "Double tap to select this category" : "Nhấn đúp để chọn danh mục này"))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

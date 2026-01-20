@@ -131,13 +131,14 @@ class RoastHistoryViewModel: ObservableObject {
     // MARK: - Public Methods
     func loadRoasts() {
         loadingSubject.onNext(true)
-        
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            
+
             let roasts = self.storageService.getRoastHistory()
-            
-            DispatchQueue.main.async {
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
                 self.roasts = roasts
                 self.roastsSubject.onNext(roasts)
                 self.loadingSubject.onNext(false)
@@ -146,9 +147,11 @@ class RoastHistoryViewModel: ObservableObject {
     }
     
     func toggleFavorite(roast: Roast) {
+        #if DEBUG
         print("🔄 RoastHistoryViewModel.toggleFavorite:")
         print("  roast.id: \(roast.id)")
         print("  roast.isFavorite BEFORE: \(roast.isFavorite)")
+        #endif
 
         storageService.toggleFavorite(roastId: roast.id)
         // Note: Local update will be handled by handleFavoriteChange via notification
@@ -159,15 +162,26 @@ class RoastHistoryViewModel: ObservableObject {
               let roastId = userInfo["roastId"] as? UUID,
               let isFavorite = userInfo["isFavorite"] as? Bool else { return }
 
-        print("🔄 RoastHistoryViewModel.handleFavoriteChange:")
-        print("  roastId: \(roastId)")
-        print("  isFavorite: \(isFavorite)")
+        // Ensure UI updates happen on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
 
-        // Update local array
-        if let index = roasts.firstIndex(where: { $0.id == roastId }) {
-            roasts[index].isFavorite = isFavorite
-            print("  roasts[\(index)].isFavorite UPDATED: \(roasts[index].isFavorite)")
-            roastsSubject.onNext(roasts)
+            #if DEBUG
+            print("🔄 RoastHistoryViewModel.handleFavoriteChange:")
+            print("  roastId: \(roastId)")
+            print("  isFavorite: \(isFavorite)")
+            #endif
+
+            // Update local array
+            if let index = self.roasts.firstIndex(where: { $0.id == roastId }) {
+                self.roasts[index].isFavorite = isFavorite
+                #if DEBUG
+                print("  roasts[\(index)].isFavorite UPDATED: \(self.roasts[index].isFavorite)")
+                #endif
+                self.roastsSubject.onNext(self.roasts)
+                // Invalidate cache when favorites change
+                self.lastCacheUpdate = nil
+            }
         }
     }
     
